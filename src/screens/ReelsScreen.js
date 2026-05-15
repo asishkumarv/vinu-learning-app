@@ -39,6 +39,7 @@ const videoData = [
 ];
 
 const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete }) => {
+  const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
   const [status, setStatus] = useState({});
   const [isMuted, setIsMuted] = useState(false);
@@ -54,9 +55,9 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   const handleVideoTap = (event) => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
-    const touchX = event.nativeEvent.pageX || event.nativeEvent.locationX;
+    const touchX = event.nativeEvent?.pageX || event.nativeEvent?.locationX || 0;
 
-    if (lastTap.current && (now - lastTap.current) < DOUBLE_TAP_DELAY) {
+    if (touchX > 0 && lastTap.current && (now - lastTap.current) < DOUBLE_TAP_DELAY) {
       if (touchX < videoWidth / 2) {
         seek(-10000, 'left');
       } else {
@@ -180,7 +181,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
             pointerEvents="none"
           />
 
-          <View style={styles.controlBar} pointerEvents="box-none">
+          <View style={[styles.controlBar, { bottom: 100 + (safeAreaInsets?.bottom || 0) }]} pointerEvents="box-none">
             <View style={styles.timerRow}>
               <Text style={styles.timeLabel}>{formatTime(status.positionMillis)}</Text>
               <Pressable onPress={handleTimelinePress} style={styles.progressBarContainer}>
@@ -305,7 +306,7 @@ const styles = StyleSheet.create({
   titleText: { color: '#FFF', fontSize: 18, fontWeight: 'bold', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 10 },
   authorText: { color: '#CCC', fontSize: 13, marginTop: 4, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 5 },
   completeButton: { padding: 8, borderRadius: 20 },
-  controlBar: { position: 'absolute', bottom: 20, left: 0, right: 0, paddingHorizontal: 20 },
+  controlBar: { position: 'absolute', bottom: 50, left: 0, right: 0, paddingHorizontal: 20 },
   timerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   timeLabel: { color: '#FFF', fontSize: 11, width: 40, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 5 },
   progressBarContainer: { flex: 1, height: 20, marginHorizontal: 5, justifyContent: 'center' },
