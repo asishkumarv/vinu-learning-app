@@ -1,13 +1,14 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# backend
+backend/node_modules/
+backend/.env
+backend/init_db.js
 
-# dependencies
-node_modules/
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
+# app
+vinu-learning-app/node_modules/
+vinu-learning-app/.expo/
+vinu-learning-app/dist/
+vinu-learning-app/web-build/
+vinu-learning-app/expo-env.d.ts
 
 # Native
 .kotlin/
