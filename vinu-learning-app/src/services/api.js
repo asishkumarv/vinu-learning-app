@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://localhost:5000/api'; // Replace with Render URL later
+const API_BASE_URL = 'https://vinu-learning-app.onrender.com/api'; 
 
 const api = axios.create({
   baseURL: API_BASE_URL,
