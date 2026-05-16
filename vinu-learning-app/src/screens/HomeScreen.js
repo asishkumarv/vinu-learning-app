@@ -42,6 +42,9 @@ export default function HomeScreen({ navigation }) {
       setClasses(response.data);
     } catch (error) {
       console.error('Error fetching classes:', error);
+      if (error.response?.status === 401) {
+        navigation.replace('Login');
+      }
     }
   };
 
@@ -51,6 +54,9 @@ export default function HomeScreen({ navigation }) {
       setReleases(response.data);
     } catch (error) {
       console.error('Error fetching recent releases:', error);
+      if (error.response?.status === 401) {
+        navigation.replace('Login');
+      }
     }
   };
 

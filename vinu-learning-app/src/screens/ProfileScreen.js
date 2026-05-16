@@ -1,9 +1,23 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  Switch, 
+  Alert, 
+  StatusBar, 
+  TextInput,
+  ActivityIndicator 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, CommonActions } from '@react-navigation/native';
+import { authApi } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
 export default function ProfileScreen() {
   const { colors, isDarkMode, toggleTheme } = useTheme();
@@ -12,51 +26,66 @@ export default function ProfileScreen() {
   
   const [notifications, setNotifications] = useState(true);
   const [autoPlay, setAutoPlay] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newName, setNewName] = useState('');
 
-  const userData = {
-    name: "Vinu Learner",
-    mobile: "+91 98765 43210",
-    email: "learner@vinulearning.com",
-    joined: "Member since May 2026",
-    class: "10th Grade"
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await authApi.getProfile();
+      setUser(response.data);
+      setNewName(response.data.name);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      if (error.response?.status === 401) {
+        handleLogout(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAction = (title) => {
-    Alert.alert("Coming Soon", `${title} feature is currently in development.`);
+  const handleUpdateProfile = async () => {
+    if (!newName.trim()) return;
+    try {
+      setLoading(true);
+      const response = await authApi.updateProfile({ name: newName });
+      setUser(response.data.user);
+      setIsEditing(false);
+      Toast.show({ type: 'success', text1: 'Profile Updated' });
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Update Failed' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleLogout = () => {
-    console.log("Logout Button Pressed");
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Logout", 
-          onPress: () => {
-            console.log("Logout confirmed by user");
-            try {
-              // Try to find the root stack navigator (AppNavigator)
-              const root = navigation.getParent() || navigation;
-              console.log("Using navigator:", root === navigation ? "Local" : "Parent");
-              
-              root.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                })
-              );
-            } catch (error) {
-              console.error("Logout Error:", error);
-              // Ultimate fallback
-              navigation.navigate('Login');
-            }
-          }, 
-          style: "destructive" 
-        }
-      ]
-    );
+  const handleLogout = (silent = false) => {
+    const performLogout = async () => {
+      await AsyncStorage.multiRemove(['userToken', 'userData']);
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    };
+
+    if (silent) {
+      performLogout();
+      return;
+    }
+
+    Alert.alert("Logout", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Logout", onPress: performLogout, style: "destructive" }
+    ]);
   };
 
   const renderMenuItem = (icon, label, onPress, rightElement = null) => (
@@ -75,17 +104,21 @@ export default function ProfileScreen() {
     </TouchableOpacity>
   );
 
+  if (loading && !user) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 10 }]}>
       <StatusBar barStyle={colors.text === '#FFFFFF' ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Account</Text>
-        <TouchableOpacity 
-          onPress={handleLogout} 
-          style={styles.logoutBtn}
-          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-        >
+        <TouchableOpacity onPress={() => handleLogout()} style={styles.logoutBtn}>
           <Ionicons name="log-out-outline" size={28} color="#FF3B30" />
         </TouchableOpacity>
       </View>
@@ -96,14 +129,39 @@ export default function ProfileScreen() {
             <View style={[styles.avatar, { backgroundColor: colors.chip }]}>
               <Ionicons name="person" size={50} color={colors.primary} />
             </View>
-            <TouchableOpacity style={styles.editBadge}>
-              <Ionicons name="camera" size={14} color="#FFF" />
-            </TouchableOpacity>
           </View>
-          <Text style={[styles.name, { color: colors.text }]}>{userData.name}</Text>
-          <Text style={[styles.email, { color: colors.textSecondary }]}>{userData.mobile}</Text>
+          
+          {isEditing ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={[styles.nameInput, { color: colors.text, borderBottomColor: colors.primary }]}
+                value={newName}
+                onChangeText={setNewName}
+                autoFocus
+              />
+              <View style={styles.editButtons}>
+                <TouchableOpacity onPress={() => setIsEditing(false)}>
+                  <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleUpdateProfile} style={styles.saveBtn}>
+                  <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 15 }}>
+                <Text style={[styles.name, { color: colors.text }]}>{user?.name}</Text>
+                <TouchableOpacity onPress={() => setIsEditing(true)} style={{ marginLeft: 10 }}>
+                  <Ionicons name="create-outline" size={20} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.email, { color: colors.textSecondary }]}>{user?.mobile}</Text>
+            </>
+          )}
+
           <View style={[styles.classBadge, { backgroundColor: colors.primary + '20' }]}>
-            <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>{userData.class}</Text>
+            <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>10th Grade</Text>
           </View>
         </View>
 
@@ -111,12 +169,12 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LEARNING PROGRESS</Text>
           <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>12</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]}>-</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Videos Watched</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>4</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]}>-</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Quizzes Done</Text>
             </View>
           </View>
@@ -140,24 +198,12 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>SUPPORT & ABOUT</Text>
           <View style={[styles.menuList, { backgroundColor: colors.surface }]}>
-            {renderMenuItem('book-outline', 'Study Materials', () => handleAction('Study Materials'))}
-            {renderMenuItem('help-circle-outline', 'Help Center', () => handleAction('Help Center'))}
-            {renderMenuItem('information-circle-outline', 'Privacy Policy', () => handleAction('Privacy Policy'))}
-            {renderMenuItem('star-outline', 'Rate Us', () => handleAction('Rate Us'))}
+            {renderMenuItem('book-outline', 'Study Materials', () => Alert.alert("Coming Soon"))}
+            {renderMenuItem('information-circle-outline', 'Privacy Policy', () => Alert.alert("Coming Soon"))}
           </View>
         </View>
 
-        <View style={styles.section}>
-          <TouchableOpacity 
-            style={[styles.logoutListItem, { backgroundColor: colors.surface }]}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out" size={20} color="#FF3B30" />
-            <Text style={[styles.logoutLabel, { color: "#FF3B30" }]}>Logout from Device</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.versionText}>Vinu Learning App v1.0.0</Text>
+        <Text style={styles.versionText}>Vinu Learning App v1.1.0</Text>
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
@@ -168,15 +214,18 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
   headerTitle: { fontSize: 28, fontWeight: 'bold' },
-  logoutBtn: { padding: 5, zIndex: 100 },
+  logoutBtn: { padding: 5 },
   scrollContent: { paddingHorizontal: 20 },
   profileCard: { alignItems: 'center', marginVertical: 20 },
   avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, padding: 3, position: 'relative' },
   avatar: { width: '100%', height: '100%', borderRadius: 50, justifyContent: 'center', alignItems: 'center' },
-  editBadge: { position: 'absolute', bottom: 5, right: 5, backgroundColor: '#0084FF', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
-  name: { fontSize: 24, fontWeight: 'bold', marginTop: 15 },
+  name: { fontSize: 24, fontWeight: 'bold' },
   email: { fontSize: 14, marginTop: 4 },
   classBadge: { marginTop: 12, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
+  editContainer: { alignItems: 'center', marginTop: 15, width: '100%' },
+  nameInput: { fontSize: 24, fontWeight: 'bold', borderBottomWidth: 1, minWidth: 200, textAlign: 'center', paddingBottom: 5 },
+  editButtons: { flexDirection: 'row', marginTop: 10, gap: 20 },
+  saveBtn: { paddingHorizontal: 10 },
   section: { marginTop: 30 },
   sectionTitle: { fontSize: 12, fontWeight: 'bold', letterSpacing: 1, marginBottom: 10, marginLeft: 5 },
   statsRow: { flexDirection: 'row', borderRadius: 20, padding: 20, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
@@ -189,7 +238,5 @@ const styles = StyleSheet.create({
   menuLeft: { flexDirection: 'row', alignItems: 'center' },
   iconBg: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   menuLabel: { fontSize: 16, fontWeight: '500' },
-  logoutListItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 20, elevation: 1 },
-  logoutLabel: { marginLeft: 10, fontSize: 16, fontWeight: 'bold' },
   versionText: { textAlign: 'center', marginTop: 40, opacity: 0.4, fontSize: 12 },
 });

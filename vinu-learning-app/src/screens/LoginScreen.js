@@ -33,15 +33,32 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
+      console.log('Login: Attempting login for', mobile);
       const response = await authApi.login({ mobile, password });
-      await AsyncStorage.setItem('userToken', response.data.token);
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-      navigation.replace('Main');
+      
+      if (response.data && response.data.token) {
+        console.log('Login: Success, saving token...');
+        await AsyncStorage.setItem('userToken', response.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        console.log('Login: Navigating to Main');
+        navigation.replace('Main');
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
+      console.error('Login Error:', error);
+      let errorMsg = 'Something went wrong';
+      if (error.response) {
+        errorMsg = error.response.data?.error || `Server Error (${error.response.status})`;
+      } else if (error.request) {
+        errorMsg = 'No response from server. Check your internet.';
+      } else {
+        errorMsg = error.message;
+      }
       Toast.show({ 
         type: 'error', 
         text1: 'Login Failed', 
-        text2: error.response?.data?.error || 'Something went wrong' 
+        text2: errorMsg 
       });
     } finally {
       setLoading(false);

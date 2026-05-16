@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Image, Text, StyleSheet, StatusBar } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,10 +9,30 @@ export default function SplashScreen({ navigation }) {
   const { colors } = useTheme();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.replace('Login');
-    }, 2500);
-    return () => clearTimeout(timer);
+    const init = async () => {
+      console.log('SplashScreen: Initializing...');
+      let token = null;
+      try {
+        token = await AsyncStorage.getItem('userToken');
+        console.log('SplashScreen: Token found:', !!token);
+      } catch (e) {
+        console.error('SplashScreen: Error reading token', e);
+      }
+
+      // Always navigate after 2.5 seconds
+      const timer = setTimeout(() => {
+        if (token) {
+          console.log('SplashScreen: Navigating to Main');
+          navigation.replace('Main');
+        } else {
+          console.log('SplashScreen: Navigating to Login');
+          navigation.replace('Login');
+        }
+      }, 2500);
+
+      return () => clearTimeout(timer);
+    };
+    init();
   }, []);
 
   return (

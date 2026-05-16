@@ -5,6 +5,7 @@ const API_BASE_URL = 'https://vinu-learning-app.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -28,6 +29,8 @@ export const authApi = {
   register: (data) => api.post('/auth/register', data),
   verifyOtp: (data) => api.post('/auth/verify-otp', data),
   login: (data) => api.post('/auth/login', data),
+  getProfile: () => api.get('/auth/profile'),
+  updateProfile: (data) => api.put('/auth/profile', data),
 };
 
 export const contentApi = {

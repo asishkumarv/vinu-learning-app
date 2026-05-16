@@ -95,3 +95,30 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 };
+
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await db.query('SELECT id, name, mobile, created_at FROM users WHERE id = $1', [req.user.id]);
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.status(200).json(user.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name } = req.body;
+    const result = await db.query(
+      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, mobile',
+      [name, req.user.id]
+    );
+    res.status(200).json({ message: 'Profile updated', user: result.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
