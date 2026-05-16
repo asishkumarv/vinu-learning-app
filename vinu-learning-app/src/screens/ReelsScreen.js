@@ -18,12 +18,9 @@ import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { contentApi, progressApi } from '../services/api';
 
-// Suppress expo-av deprecation warning as per user request to "solve" the visible warning
-// Migration to expo-video would require a major rewrite and is recommended for the next development phase.
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
-
-// Video data will be fetched from the API
 
 const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete }) => {
   const safeAreaInsets = useSafeAreaInsets();
@@ -34,16 +31,25 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   const [isBuffering, setIsBuffering] = useState(false);
   const lastTap = useRef(null);
 
+  useEffect(() => {
+    const handlePlayPause = async () => {
+      try {
+        if (isActive && isFocused) {
+          await videoRef.current?.playAsync();
+        } else {
+          await videoRef.current?.pauseAsync();
+        }
+      } catch (e) {
+        // Silently catch play/pause interruptions
+      }
+    };
+    handlePlayPause();
+  }, [isActive, isFocused]);
+
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
-    setIsBuffering(newStatus.isBuffering);
+    setIsBuffering(newStatus.isBuffering || !newStatus.isLoaded);
   };
-
-  useEffect(() => {
-    if (!isActive || !isFocused) {
-      videoRef.current?.pauseAsync();
-    }
-  }, [isActive, isFocused]);
 
   const handleVideoTap = (event) => {
     const now = Date.now();
@@ -76,13 +82,9 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
 
   const seek = async (amount, direction) => {
     if (status.positionMillis !== undefined && status.durationMillis) {
-      const wasPlaying = status.isPlaying;
       const newPos = Math.max(0, Math.min(status.durationMillis, status.positionMillis + amount));
       if (isFinite(newPos)) {
         await videoRef.current?.setPositionAsync(newPos);
-        if (wasPlaying) {
-          await videoRef.current?.playAsync();
-        }
         if (direction) {
           setShowSeekFeedback(direction);
           setTimeout(() => setShowSeekFeedback(null), 600);
@@ -99,9 +101,6 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
       const newPosition = percentage * status.durationMillis;
       if (isFinite(newPosition)) {
         videoRef.current?.setPositionAsync(Math.max(0, Math.min(status.durationMillis, newPosition)));
-        if (status.isPlaying) {
-          videoRef.current?.playAsync();
-        }
       }
     }
   };
@@ -133,12 +132,13 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           onLoad={() => setIsBuffering(false)}
         />
         
-        {isBuffering && (
+        {isBuffering && isActive && (
           <View style={styles.bufferingOverlay}>
             <ActivityIndicator size="large" color="#0084FF" />
+            <Text style={{ color: '#0084FF', marginTop: 10, fontWeight: '600' }}>Loading...</Text>
           </View>
         )}
-        
+
         {showSeekFeedback && (
           <View style={[styles.seekFeedback, showSeekFeedback === 'left' ? { left: 40 } : { right: 40 }]}>
             <View style={styles.seekCircle}>
@@ -155,7 +155,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
         )}
       </Pressable>
       
-      {(!status.isPlaying || !isActive) && (
+      {(!status.isPlaying || !isActive) && !isBuffering && (
         <View style={styles.hudContainer} pointerEvents="box-none">
           <LinearGradient
             colors={['rgba(0,0,0,0.6)', 'transparent']}
@@ -166,7 +166,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           <View style={styles.topOverlay} pointerEvents="box-none">
             <View style={styles.detailsContainer}>
               <Text style={styles.titleText}>{item.title}</Text>
-              <Text style={styles.authorText}>By {item.author}</Text>
+              <Text style={styles.authorText}>By {item.author || 'Dr. Vinu'}</Text>
             </View>
             <TouchableOpacity 
               style={[styles.completeButton, { backgroundColor: isCompleted ? '#4CAF50' : 'rgba(0,0,0,0.5)' }]}
@@ -216,8 +216,6 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   );
 });
 
-import { contentApi, progressApi } from '../services/api';
-
 export default function ReelsScreen({ route }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -239,8 +237,6 @@ export default function ReelsScreen({ route }) {
 
   const fetchVideos = async () => {
     try {
-      // If videoId is passed, we might want to fetch that specific video or its chapter's videos
-      // For now, let's fetch all "recent" videos or something similar for the reels
       const response = await contentApi.getRecentReleases();
       setVideoData(response.data);
     } catch (error) {
@@ -263,22 +259,9 @@ export default function ReelsScreen({ route }) {
     }
   };
 
-  useEffect(() => {
-    if (route.params?.videoId && videoData.length > 0) {
-      const index = videoData.findIndex(v => v.id === route.params.videoId);
-      if (index !== -1) {
-        setActiveVideoIndex(index);
-        setTimeout(() => {
-           flatListRef.current?.scrollToIndex({ index, animated: true });
-        }, 500);
-      }
-    }
-  }, [route.params?.videoId, videoData]);
-
   const toggleComplete = async (id) => {
     const isNowCompleted = !completedVideos[id];
     setCompletedVideos(prev => ({ ...prev, [id]: isNowCompleted }));
-    
     try {
       await progressApi.updateProgress(id, isNowCompleted ? 'completed' : 'started');
     } catch (error) {
@@ -293,6 +276,10 @@ export default function ReelsScreen({ route }) {
   }).current;
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
+
+  const initialIndex = route.params?.videoId && videoData.length > 0 
+    ? videoData.findIndex(v => Number(v.id) === Number(route.params.videoId)) 
+    : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: '#000', paddingTop: insets.top }]}>
@@ -320,18 +307,16 @@ export default function ReelsScreen({ route }) {
           )}
           keyExtractor={(item) => item.id.toString()}
           pagingEnabled={true}
-          disableIntervalMomentum={true}
-          showsVerticalScrollIndicator={false}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          snapToInterval={videoHeight}
-          snapToAlignment="start"
-          decelerationRate={Platform.OS === 'ios' ? 'fast' : 0.9}
+          initialScrollIndex={initialIndex !== -1 ? initialIndex : 0}
           getItemLayout={(data, index) => ({
             length: videoHeight,
             offset: videoHeight * index,
             index,
           })}
+          disableIntervalMomentum={true}
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           removeClippedSubviews={Platform.OS !== 'web'}
           maxToRenderPerBatch={2}
           windowSize={3}
@@ -367,5 +352,5 @@ const styles = StyleSheet.create({
   mainPlayBtn: { backgroundColor: 'rgba(255,255,255,0.1)', width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 5 },
   topGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   bottomGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 180 },
-  bufferingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', zIndex: 15 },
+  bufferingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 15 },
 });
