@@ -24,7 +24,7 @@ import UnlockModal from '../components/UnlockModal';
 
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
-const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal }) => {
+const VideoItem = memo(({ item, index, totalCount, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal, autoPlay, onAutoNext }) => {
   const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
   
@@ -53,7 +53,15 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
 
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
-    // Explicitly update loading state
+    if (newStatus.didJustFinish) {
+      onToggleComplete(item.id, 'completed');
+      if (autoPlay) {
+        const nextIndex = index + 1;
+        if (nextIndex < totalCount) {
+          onAutoNext?.(nextIndex);
+        }
+      }
+    }
     if (newStatus.isBuffering || !newStatus.isLoaded) {
       if (!isLoading) setIsLoading(true);
     } else {
@@ -190,7 +198,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
             </View>
             <TouchableOpacity 
               style={[styles.completeButton, { backgroundColor: isCompleted ? '#4CAF50' : 'rgba(0,0,0,0.5)' }]}
-              onPress={() => onToggleComplete(item.id)}
+              onPress={() => onToggleComplete(item.id, isCompleted ? 'started' : 'completed')}
             >
               <Ionicons name={isCompleted ? 'checkmark-circle' : 'checkmark-circle-outline'} size={24} color="#FFF" />
             </TouchableOpacity>
@@ -259,13 +267,22 @@ export default function ReelsScreen({ route, navigation }) {
   const [unlockedVideos, setUnlockedVideos] = useState({});
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedVideoToUnlock, setSelectedVideoToUnlock] = useState(null);
+  const [autoPlay, setAutoPlay] = useState(false);
   const flatListRef = useRef(null);
 
   useEffect(() => {
     fetchVideos();
     fetchUserProgress();
     loadUnlockedVideos();
-  }, []);
+    loadSettings();
+  }, [route.params?.videoId]);
+
+  const loadSettings = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('autoPlay');
+      if (stored !== null) setAutoPlay(JSON.parse(stored));
+    } catch (e) { console.error(e); }
+  };
 
   const loadUnlockedVideos = async () => {
     try {
@@ -296,6 +313,18 @@ export default function ReelsScreen({ route, navigation }) {
     }
   };
 
+  useEffect(() => {
+    if (route.params?.videoId && videoData.length > 0) {
+      const index = videoData.findIndex(v => Number(v.id) === Number(route.params.videoId));
+      if (index !== -1) {
+        setActiveVideoIndex(index);
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index, animated: false });
+        }, 500);
+      }
+    }
+  }, [route.params?.videoId, videoData]);
+
   const fetchUserProgress = async () => {
     try {
       const response = await progressApi.getUserProgress();
@@ -311,11 +340,11 @@ export default function ReelsScreen({ route, navigation }) {
     }
   };
 
-  const toggleComplete = async (id) => {
-    const isNowCompleted = !completedVideos[id];
+  const toggleComplete = async (id, newStatus) => {
+    const isNowCompleted = newStatus === 'completed';
     setCompletedVideos(prev => ({ ...prev, [id]: isNowCompleted }));
     try {
-      await progressApi.updateProgress(id, isNowCompleted ? 'completed' : 'started');
+      await progressApi.updateProgress({ episode_id: id, status: newStatus });
     } catch (error) {
       console.error('Error updating progress:', error);
     }
@@ -357,6 +386,10 @@ export default function ReelsScreen({ route, navigation }) {
               onToggleComplete={toggleComplete}
               isUnlocked={unlockedVideos[item.id]}
               onOpenUnlockModal={openUnlockModal}
+              autoPlay={autoPlay}
+              onAutoNext={(nextIndex) => {
+                flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+              }}
             />
           )}
           keyExtractor={(item) => item.id.toString()}

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, CommonActions } from '@react-navigation/native';
-import { authApi } from '../services/api';
+import { authApi, progressApi } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
@@ -30,17 +30,37 @@ export default function ProfileScreen() {
   const [user, setUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState('');
+  const [stats, setStats] = useState({ watched_count: 0 });
 
   useEffect(() => {
-    fetchProfile();
+    loadSettings();
+    fetchProfileData();
   }, []);
 
-  const fetchProfile = async () => {
+  const loadSettings = async () => {
+    try {
+      const storedAutoPlay = await AsyncStorage.getItem('autoPlay');
+      const storedNotif = await AsyncStorage.getItem('notifications');
+      if (storedAutoPlay !== null) setAutoPlay(JSON.parse(storedAutoPlay));
+      if (storedNotif !== null) setNotifications(JSON.parse(storedNotif));
+    } catch (e) { console.error(e); }
+  };
+
+  const toggleSetting = async (key, value, setter) => {
+    setter(value);
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+  };
+
+  const fetchProfileData = async () => {
     try {
       setLoading(true);
-      const response = await authApi.getProfile();
-      setUser(response.data);
-      setNewName(response.data.name);
+      const [profileRes, statsRes] = await Promise.all([
+        authApi.getProfile(),
+        progressApi.getStats()
+      ]);
+      setUser(profileRes.data);
+      setNewName(profileRes.data.name);
+      setStats(statsRes.data);
     } catch (error) {
       console.error('Error fetching profile:', error);
       if (error.response?.status === 401) {
@@ -169,12 +189,12 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LEARNING PROGRESS</Text>
           <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>-</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]}>{stats.watched_count}</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Videos Watched</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>-</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]}>0</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Quizzes Done</Text>
             </View>
           </View>
@@ -186,11 +206,11 @@ export default function ProfileScreen() {
             {renderMenuItem('moon-outline', 'Dark Mode', toggleTheme, 
               <Switch value={isDarkMode} onValueChange={toggleTheme} />
             )}
-            {renderMenuItem('notifications-outline', 'Push Notifications', () => setNotifications(!notifications), 
-              <Switch value={notifications} onValueChange={setNotifications} />
+            {renderMenuItem('notifications-outline', 'Push Notifications', () => toggleSetting('notifications', !notifications, setNotifications), 
+              <Switch value={notifications} onValueChange={(val) => toggleSetting('notifications', val, setNotifications)} />
             )}
-            {renderMenuItem('play-outline', 'Auto-play Videos', () => setAutoPlay(!autoPlay), 
-              <Switch value={autoPlay} onValueChange={setAutoPlay} />
+            {renderMenuItem('play-outline', 'Auto-play Videos', () => toggleSetting('autoPlay', !autoPlay, setAutoPlay), 
+              <Switch value={autoPlay} onValueChange={(val) => toggleSetting('autoPlay', val, setAutoPlay)} />
             )}
           </View>
         </View>
@@ -203,7 +223,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.versionText}>Vinu Learning App v1.1.0</Text>
+        <Text style={styles.versionText}>Vinu Learning App v1.2.0</Text>
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>

@@ -43,8 +43,9 @@ export const contentApi = {
 };
 
 export const progressApi = {
-  updateProgress: (episodeId, status) => api.post('/progress/update', { episode_id: episodeId, status }),
-  getUserProgress: () => api.get('/progress'),
+  updateProgress: (data) => api.post('/progress/update', data),
+  getUserProgress: () => api.get('/progress/user'),
+  getStats: () => api.get('/progress/stats'),
 };
 
 export default api;

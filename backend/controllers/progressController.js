@@ -36,3 +36,17 @@ exports.getUserProgress = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch progress' });
   }
 };
+
+exports.getProgressStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await db.query(
+      'SELECT COUNT(*) as watched_count FROM user_progress WHERE user_id = $1 AND status = \'completed\'',
+      [userId]
+    );
+    res.json({ watched_count: parseInt(result.rows[0].watched_count) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+};
