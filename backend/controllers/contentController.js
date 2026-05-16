@@ -56,14 +56,18 @@ exports.getRecentReleases = async (req, res) => {
 exports.streamVideo = async (req, res) => {
   try {
     const { episodeId } = req.params;
-    const result = await db.query('SELECT video_data, content_type FROM episodes WHERE id = $1', [episodeId]);
+    
+    // 1. Get video metadata and size first (very fast)
+    const metaResult = await db.query(
+      'SELECT octet_length(video_data) as size, content_type FROM episodes WHERE id = $1', 
+      [episodeId]
+    );
 
-    if (result.rows.length === 0 || !result.rows[0].video_data) {
+    if (metaResult.rows.length === 0 || !metaResult.rows[0].size) {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    const { video_data, content_type } = result.rows[0];
-    const videoSize = video_data.length;
+    const { size: videoSize, content_type } = metaResult.rows[0];
     const range = req.headers.range;
 
     if (range) {
@@ -77,8 +81,14 @@ exports.streamVideo = async (req, res) => {
       }
 
       const chunksize = (end - start) + 1;
-      const file = video_data.slice(start, end + 1);
       
+      // 2. Fetch ONLY the requested chunk from the database (saves RAM and time)
+      // PostgreSQL substring for bytea is 1-indexed
+      const chunkResult = await db.query(
+        'SELECT substring(video_data from $1 for $2) as data FROM episodes WHERE id = $3',
+        [start + 1, chunksize, episodeId]
+      );
+
       const head = {
         'Content-Range': `bytes ${start}-${end}/${videoSize}`,
         'Accept-Ranges': 'bytes',
@@ -87,14 +97,16 @@ exports.streamVideo = async (req, res) => {
       };
 
       res.writeHead(206, head);
-      res.end(file);
+      res.end(chunkResult.rows[0].data);
     } else {
+      // If no range, we still fetch the whole thing, but typically players always send ranges
+      const result = await db.query('SELECT video_data FROM episodes WHERE id = $1', [episodeId]);
       const head = {
         'Content-Length': videoSize,
         'Content-Type': content_type || 'video/mp4',
       };
       res.writeHead(200, head);
-      res.end(video_data);
+      res.end(result.rows[0].video_data);
     }
   } catch (error) {
     console.error('Error streaming video:', error);
