@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,58 +15,85 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { contentApi } from '../services/api';
 
 const { width } = Dimensions.get('window');
-
-const subjectsList = ['Maths', 'Science', 'Physics', 'Biology', 'Social Science', 'English'];
-
-const classes = [
-  { id: '8th', name: '8th Class', subjects: subjectsList, available: 6 },
-  { id: '9th', name: '9th Class', subjects: subjectsList, available: 6 },
-  { id: '10th', name: '10th Class', subjects: subjectsList, available: 6 },
-];
-
-const subjectVideos = {
-  'Biology': [
-    { id: 'bio1', title: 'Biology Chapter 1', image: 'https://img.freepik.com/free-vector/biology-background-with-microscope_23-2148116518.jpg' },
-    { id: 'bio2', title: 'Biology Chapter 2', image: 'https://img.freepik.com/free-vector/human-cell-structure-background_23-2148102431.jpg' },
-    { id: 'bio3', title: 'Biology Chapter 3', image: 'https://img.freepik.com/free-vector/science-education-background_23-2148483166.jpg' },
-  ],
-  'Physics': [
-    { id: 'phy1', title: 'Physics Chapter 1', image: 'https://img.freepik.com/free-vector/physics-formulas-concept_23-2148147773.jpg' },
-    { id: 'phy2', title: 'Physics Chapter 2', image: 'https://img.freepik.com/free-vector/abstract-optical-fiber-background_23-2148296317.jpg' },
-    { id: 'phy3', title: 'Physics Chapter 3', image: 'https://img.freepik.com/free-vector/scientific-formulas-concept_23-2148484168.jpg' },
-  ],
-  'Social Science': [
-    { id: 'soc1', title: 'Social Studies Ch 1', image: 'https://img.freepik.com/free-vector/indian-map-design_1017-15437.jpg' },
-    { id: 'soc2', title: 'Social Studies Ch 2', image: 'https://img.freepik.com/free-vector/historical-monuments-concept_23-2148485296.jpg' },
-    { id: 'soc3', title: 'Social Studies Ch 3', image: 'https://img.freepik.com/free-vector/geography-background-with-globe_23-2148147775.jpg' },
-    { id: 'soc4', title: 'Social Studies Ch 4', image: 'https://img.freepik.com/free-vector/indian-parliament-building-illustration_23-2148484896.jpg' },
-  ],
-  'Science': [
-    { id: 'bio1', title: 'Biology Intro', image: 'https://img.freepik.com/free-vector/biology-background-with-microscope_23-2148116518.jpg' },
-    { id: 'phy1', title: 'Physics Intro', image: 'https://img.freepik.com/free-vector/physics-formulas-concept_23-2148147773.jpg' },
-  ],
-  'Maths': [
-    { id: 'phy1', title: 'Calculus Basics', image: 'https://img.freepik.com/free-vector/math-background-with-formulas_23-2148147774.jpg' },
-  ],
-  'English': [
-    { id: 'soc1', title: 'Grammar Part 1', image: 'https://img.freepik.com/free-vector/english-book-background_23-2149483516.jpg' },
-  ]
-};
-
-const releases = [
-  { id: 'bio1', title: 'Biology Chapter 1', subject: 'Biology', date: 'New', image: 'https://img.freepik.com/free-vector/biology-background-with-microscope_23-2148116518.jpg' },
-  { id: 'phy1', title: 'Physics Chapter 1', subject: 'Physics', date: 'New', image: 'https://img.freepik.com/free-vector/physics-formulas-concept_23-2148147773.jpg' },
-  { id: 'soc1', title: 'Social Studies Ch 1', subject: 'Social', date: 'New', image: 'https://img.freepik.com/free-vector/indian-map-design_1017-15437.jpg' },
-];
 
 export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeState, setActiveState] = useState('AP');
-  const [expandedClass, setExpandedClass] = useState('10th');
-  const [selectedSubject, setSelectedSubject] = useState('Biology');
+  const [classes, setClasses] = useState([]);
+  const [expandedClass, setExpandedClass] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [videos, setVideos] = useState([]);
+  const [releases, setReleases] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchClasses();
+    fetchRecentReleases();
+  }, []);
+
+  const fetchClasses = async () => {
+    try {
+      const response = await contentApi.getClasses();
+      setClasses(response.data);
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+    }
+  };
+
+  const fetchRecentReleases = async () => {
+    try {
+      const response = await contentApi.getRecentReleases();
+      setReleases(response.data);
+    } catch (error) {
+      console.error('Error fetching recent releases:', error);
+    }
+  };
+
+  const handleClassPress = async (clsId) => {
+    if (expandedClass === clsId) {
+      setExpandedClass(null);
+      setSubjects([]);
+      setSelectedSubject(null);
+      setVideos([]);
+    } else {
+      setExpandedClass(clsId);
+      setLoading(true);
+      try {
+        const response = await contentApi.getSubjects(clsId);
+        setSubjects(response.data);
+      } catch (error) {
+        console.error('Error fetching subjects:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleSubjectPress = async (subId) => {
+    setSelectedSubject(subId);
+    setLoading(true);
+    try {
+      // For now, chapters and episodes might be simplified or we fetch episodes for the first chapter
+      // Here we'll fetch episodes for a subject (maybe we need an API to get all episodes for a subject)
+      // I'll assume we need to get chapters first, then episodes for the first chapter for display
+      const chaptersRes = await contentApi.getChapters(subId);
+      if (chaptersRes.data.length > 0) {
+        const episodesRes = await contentApi.getEpisodes(chaptersRes.data[0].id);
+        setVideos(episodesRes.data);
+      } else {
+        setVideos([]);
+      }
+    } catch (error) {
+      console.error('Error fetching videos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const goToVideos = (videoId) => {
     navigation.navigate('Videos', { videoId });
@@ -126,7 +153,7 @@ export default function HomeScreen({ navigation }) {
               <View key={cls.id}>
                 <TouchableOpacity
                   style={styles.classHeader}
-                  onPress={() => setExpandedClass(expandedClass === cls.id ? null : cls.id)}
+                  onPress={() => handleClassPress(cls.id)}
                 >
                   <Text style={[
                     styles.className,
@@ -140,20 +167,20 @@ export default function HomeScreen({ navigation }) {
                 {expandedClass === cls.id && (
                   <View>
                     <View style={styles.subjectsGrid}>
-                      {cls.subjects.map((sub) => (
+                      {subjects.map((sub) => (
                         <TouchableOpacity
-                          key={sub}
+                          key={sub.id}
                           style={[
                             styles.subjectChip,
-                            { backgroundColor: selectedSubject === sub ? colors.primary : colors.chip }
+                            { backgroundColor: selectedSubject === sub.id ? colors.primary : colors.chip }
                           ]}
-                          onPress={() => setSelectedSubject(sub)}
+                          onPress={() => handleSubjectPress(sub.id)}
                         >
                           <Text style={[
                             styles.subjectText,
-                            { color: selectedSubject === sub ? '#FFFFFF' : colors.chipText }
+                            { color: selectedSubject === sub.id ? '#FFFFFF' : colors.chipText }
                           ]}>
-                            {sub}
+                            {sub.name}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -162,16 +189,16 @@ export default function HomeScreen({ navigation }) {
                     {selectedSubject && (
                       <View style={styles.videoList}>
                         <Text style={[styles.videoListTitle, { color: colors.text }]}>
-                          {selectedSubject} Lessons
+                           Lessons
                         </Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {(subjectVideos[selectedSubject] || []).map((video) => (
+                          {videos.map((video) => (
                             <TouchableOpacity 
                               key={video.id} 
                               style={[styles.subjectVideoCard, { backgroundColor: colors.chip }]}
                               onPress={() => goToVideos(video.id)}
                             >
-                              <Image source={{ uri: video.image }} style={styles.subjectVideoImage} />
+                              <Image source={{ uri: video.thumbnail_url || 'https://via.placeholder.com/150' }} style={styles.subjectVideoImage} />
                               <Text style={[styles.subjectVideoTitle, { color: colors.text }]} numberOfLines={1}>
                                 {video.title}
                               </Text>
@@ -180,7 +207,7 @@ export default function HomeScreen({ navigation }) {
                               </View>
                             </TouchableOpacity>
                           ))}
-                          {(!(subjectVideos[selectedSubject]) || subjectVideos[selectedSubject].length === 0) && (
+                          {videos.length === 0 && !loading && (
                              <Text style={{color: colors.textSecondary, padding: 20}}>Coming soon...</Text>
                           )}
                         </ScrollView>
@@ -204,14 +231,14 @@ export default function HomeScreen({ navigation }) {
             contentContainerStyle={styles.horizontalScroll}
             renderItem={({ item }) => (
               <TouchableOpacity style={[styles.chapterCard, { backgroundColor: colors.surface }]} onPress={() => goToVideos(item.id)}>
-                <Image source={{ uri: item.image }} style={styles.chapterImage} />
+                <Image source={{ uri: item.thumbnail_url || 'https://via.placeholder.com/150' }} style={styles.chapterImage} />
                 <View style={styles.chapterInfo}>
                    <Text style={[styles.chapterInfoTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{item.subject}</Text>
+                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{item.subject_name}</Text>
                 </View>
               </TouchableOpacity>
             )}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id.toString()}
           />
         </View>
       </ScrollView>

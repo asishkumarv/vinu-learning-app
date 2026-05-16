@@ -22,21 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 // Migration to expo-video would require a major rewrite and is recommended for the next development phase.
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
-const videoData = [
-  // Biology
-  { id: 'bio1', url: require('../../assets/videos/10th biology chapter 1.mp4'), title: 'Biology - Chapter 1', author: 'Dr. Vinu' },
-  { id: 'bio2', url: require('../../assets/videos/10th biology chapter 2.mp4'), title: 'Biology - Chapter 2', author: 'Dr. Vinu' },
-  { id: 'bio3', url: require('../../assets/videos/10th biology chapter 3.mp4'), title: 'Biology - Chapter 3', author: 'Dr. Vinu' },
-  // Physics
-  { id: 'phy1', url: require('../../assets/videos/10th physics chapter 1.mp4'), title: 'Physics - Chapter 1', author: 'Prof. Sharma' },
-  { id: 'phy2', url: require('../../assets/videos/10th physics chapter 2.mp4'), title: 'Physics - Chapter 2', author: 'Prof. Sharma' },
-  { id: 'phy3', url: require('../../assets/videos/10th physics chapter 3.mp4'), title: 'Physics - Chapter 3', author: 'Prof. Sharma' },
-  // Social Studies
-  { id: 'soc1', url: require('../../assets/videos/10th social studies chapter 1.mp4'), title: 'Social Studies - Chapter 1', author: 'Ms. Lohitha' },
-  { id: 'soc2', url: require('../../assets/videos/10th social studies chapter 2.mp4'), title: 'Social Studies - Chapter 2', author: 'Ms. Lohitha' },
-  { id: 'soc3', url: require('../../assets/videos/10 th social studeis chapter 3.mp4'), title: 'Social Studies - Chapter 3', author: 'Ms. Lohitha' },
-  { id: 'soc4', url: require('../../assets/videos/10th social studies chapter 4.mp4'), title: 'Social Studies - Chapter 4', author: 'Ms. Lohitha' },
-];
+// Video data will be fetched from the API
 
 const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete }) => {
   const safeAreaInsets = useSafeAreaInsets();
@@ -128,7 +114,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
       <Pressable onPress={handleVideoTap} style={styles.videoWrapper}>
         <Video
           ref={videoRef}
-          source={item.url}
+          source={{ uri: contentApi.getVideoUrl(item.id) }}
           style={styles.video}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={isActive && isFocused}
@@ -215,6 +201,8 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   );
 });
 
+import { contentApi, progressApi } from '../services/api';
+
 export default function ReelsScreen({ route }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -226,10 +214,42 @@ export default function ReelsScreen({ route }) {
 
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   const [completedVideos, setCompletedVideos] = useState({});
+  const [videoData, setVideoData] = useState([]);
   const flatListRef = useRef(null);
 
   useEffect(() => {
-    if (route.params?.videoId) {
+    fetchVideos();
+    fetchUserProgress();
+  }, []);
+
+  const fetchVideos = async () => {
+    try {
+      // If videoId is passed, we might want to fetch that specific video or its chapter's videos
+      // For now, let's fetch all "recent" videos or something similar for the reels
+      const response = await contentApi.getRecentReleases();
+      setVideoData(response.data);
+    } catch (error) {
+      console.error('Error fetching videos:', error);
+    }
+  };
+
+  const fetchUserProgress = async () => {
+    try {
+      const response = await progressApi.getUserProgress();
+      const progressMap = {};
+      response.data.forEach(p => {
+        if (p.status === 'completed') {
+          progressMap[p.episode_id] = true;
+        }
+      });
+      setCompletedVideos(progressMap);
+    } catch (error) {
+      console.error('Error fetching progress:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (route.params?.videoId && videoData.length > 0) {
       const index = videoData.findIndex(v => v.id === route.params.videoId);
       if (index !== -1) {
         setActiveVideoIndex(index);
@@ -238,10 +258,17 @@ export default function ReelsScreen({ route }) {
         }, 500);
       }
     }
-  }, [route.params?.videoId]);
+  }, [route.params?.videoId, videoData]);
 
-  const toggleComplete = (id) => {
-    setCompletedVideos(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleComplete = async (id) => {
+    const isNowCompleted = !completedVideos[id];
+    setCompletedVideos(prev => ({ ...prev, [id]: isNowCompleted }));
+    
+    try {
+      await progressApi.updateProgress(id, isNowCompleted ? 'completed' : 'started');
+    } catch (error) {
+      console.error('Error updating progress:', error);
+    }
   };
 
   const onViewableItemsChanged = useRef(({ viewableItems }) => {

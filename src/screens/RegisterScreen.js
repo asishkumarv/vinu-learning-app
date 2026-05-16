@@ -9,11 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { authApi } from '../services/api';
+import Toast from 'react-native-toast-message';
 
 export default function RegisterScreen({ navigation }) {
   const { colors } = useTheme();
@@ -22,6 +24,38 @@ export default function RegisterScreen({ navigation }) {
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async () => {
+    if (!fullName || !mobileNumber || !password || !confirmPassword) {
+      Toast.show({ type: 'error', text1: 'Please fill all fields' });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Toast.show({ type: 'error', text1: 'Passwords do not match' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authApi.register({ 
+        name: fullName, 
+        mobile: mobileNumber, 
+        password 
+      });
+      Toast.show({ type: 'success', text1: 'OTP sent to WhatsApp' });
+      navigation.navigate('Otp', { mobile: mobileNumber });
+    } catch (error) {
+      Toast.show({ 
+        type: 'error', 
+        text1: 'Registration Failed', 
+        text2: error.response?.data?.error || 'Something went wrong' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -77,13 +111,14 @@ export default function RegisterScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.buttonContainer}
-            onPress={() => navigation.navigate('Otp')}
+            onPress={handleRegister}
+            disabled={loading}
           >
             <LinearGradient
               colors={['#0084FF', '#0055FF']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>Register</Text>
+              <Text style={styles.buttonText}>{loading ? 'Sending OTP...' : 'Register'}</Text>
             </LinearGradient>
           </TouchableOpacity>
 

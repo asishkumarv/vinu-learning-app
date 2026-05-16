@@ -7,24 +7,44 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Image,
+  StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { authApi } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
-export default function OtpScreen({ navigation }) {
+export default function OtpScreen({ navigation, route }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { mobile } = route.params || {};
   const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const verifyOtp = () => {
-    if (otp.length === 6) {
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 6) {
+      Toast.show({ type: 'error', text1: 'Please enter a 6 digit OTP' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authApi.verifyOtp({ mobile, otp });
+      await AsyncStorage.setItem('userToken', response.data.token);
+      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+      Toast.show({ type: 'success', text1: 'Verification Successful' });
       navigation.replace('Main');
-    } else {
-      alert('Please enter a valid 6 digit dummy OTP');
+    } catch (error) {
+      Toast.show({ 
+        type: 'error', 
+        text1: 'Verification Failed', 
+        text2: error.response?.data?.error || 'Something went wrong' 
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,13 +80,14 @@ export default function OtpScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.buttonContainer}
-            onPress={verifyOtp}
+            onPress={handleVerifyOtp}
+            disabled={loading}
           >
             <LinearGradient
               colors={['#0084FF', '#0055FF']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>Verify & Proceed</Text>
+              <Text style={styles.buttonText}>{loading ? 'Verifying...' : 'Verify & Proceed'}</Text>
             </LinearGradient>
           </TouchableOpacity>
 
