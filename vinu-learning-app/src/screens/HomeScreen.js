@@ -149,6 +149,13 @@ export default function HomeScreen({ navigation }) {
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Select Class</Text>
             
+            {classes.length === 0 && !loading && (
+               <View style={styles.comingSoonContainer}>
+                 <Ionicons name="construct-outline" size={40} color={colors.textSecondary} />
+                 <Text style={[styles.comingSoonText, { color: colors.textSecondary }]}>Classes coming soon...</Text>
+               </View>
+            )}
+
             {classes.map((cls) => (
               <View key={cls.id}>
                 <TouchableOpacity
@@ -167,6 +174,9 @@ export default function HomeScreen({ navigation }) {
                 {expandedClass === cls.id && (
                   <View>
                     <View style={styles.subjectsGrid}>
+                      {subjects.length === 0 && !loading && (
+                        <Text style={{ color: colors.textSecondary, paddingVertical: 10 }}>Subjects coming soon...</Text>
+                      )}
                       {subjects.map((sub) => (
                         <TouchableOpacity
                           key={sub.id}
@@ -198,7 +208,10 @@ export default function HomeScreen({ navigation }) {
                               style={[styles.subjectVideoCard, { backgroundColor: colors.chip }]}
                               onPress={() => goToVideos(video.id)}
                             >
-                              <Image source={{ uri: video.thumbnail_url || 'https://via.placeholder.com/150' }} style={styles.subjectVideoImage} />
+                              <Image 
+                                source={{ uri: video.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
+                                style={styles.subjectVideoImage} 
+                              />
                               <Text style={[styles.subjectVideoTitle, { color: colors.text }]} numberOfLines={1}>
                                 {video.title}
                               </Text>
@@ -208,7 +221,10 @@ export default function HomeScreen({ navigation }) {
                             </TouchableOpacity>
                           ))}
                           {videos.length === 0 && !loading && (
-                             <Text style={{color: colors.textSecondary, padding: 20}}>Coming soon...</Text>
+                             <View style={styles.comingSoonLesson}>
+                               <Ionicons name="time-outline" size={24} color={colors.textSecondary} />
+                               <Text style={{color: colors.textSecondary, marginLeft: 10}}>Lessons coming soon...</Text>
+                             </View>
                           )}
                         </ScrollView>
                       </View>
@@ -231,7 +247,10 @@ export default function HomeScreen({ navigation }) {
             contentContainerStyle={styles.horizontalScroll}
             renderItem={({ item }) => (
               <TouchableOpacity style={[styles.chapterCard, { backgroundColor: colors.surface }]} onPress={() => goToVideos(item.id)}>
-                <Image source={{ uri: item.thumbnail_url || 'https://via.placeholder.com/150' }} style={styles.chapterImage} />
+                <Image 
+                  source={{ uri: item.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
+                  style={styles.chapterImage} 
+                />
                 <View style={styles.chapterInfo}>
                    <Text style={[styles.chapterInfoTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{item.subject_name}</Text>
@@ -280,4 +299,7 @@ const styles = StyleSheet.create({
   chapterImage: { width: '100%', height: 110 },
   chapterInfo: { padding: 10 },
   chapterInfoTitle: { fontSize: 14, fontWeight: 'bold' },
+  comingSoonContainer: { alignItems: 'center', padding: 30, opacity: 0.7 },
+  comingSoonText: { fontSize: 16, marginTop: 10, fontWeight: '500' },
+  comingSoonLesson: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 12, marginVertical: 10 },
 });

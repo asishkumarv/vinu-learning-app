@@ -54,9 +54,3 @@ CREATE TABLE IF NOT EXISTS user_progress (
     UNIQUE(user_id, episode_id)
 );
 
--- Seed Data (Optional)
-INSERT INTO classes (name) VALUES ('8th Class'), ('9th Class'), ('10th Class') ON CONFLICT DO NOTHING;
-
-INSERT INTO subjects (class_id, name) VALUES 
-(3, 'Maths'), (3, 'Science'), (3, 'Physics'), (3, 'Biology'), (3, 'Social Science'), (3, 'English')
-ON CONFLICT DO NOTHING;

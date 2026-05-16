@@ -63,13 +63,39 @@ exports.streamVideo = async (req, res) => {
     }
 
     const { video_data, content_type } = result.rows[0];
-    
-    res.writeHead(200, {
-      'Content-Type': content_type || 'video/mp4',
-      'Content-Length': video_data.length,
-    });
-    
-    res.end(video_data);
+    const videoSize = video_data.length;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : videoSize - 1;
+
+      if (start >= videoSize) {
+        res.status(416).send('Requested range not satisfiable\n' + start + ' >= ' + videoSize);
+        return;
+      }
+
+      const chunksize = (end - start) + 1;
+      const file = video_data.slice(start, end + 1);
+      
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${videoSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': content_type || 'video/mp4',
+      };
+
+      res.writeHead(206, head);
+      res.end(file);
+    } else {
+      const head = {
+        'Content-Length': videoSize,
+        'Content-Type': content_type || 'video/mp4',
+      };
+      res.writeHead(200, head);
+      res.end(video_data);
+    }
   } catch (error) {
     console.error('Error streaming video:', error);
     res.status(500).json({ error: 'Failed to stream video' });

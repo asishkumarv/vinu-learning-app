@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   StatusBar,
   LogBox,
+  ActivityIndicator,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +31,13 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   const [status, setStatus] = useState({});
   const [isMuted, setIsMuted] = useState(false);
   const [showSeekFeedback, setShowSeekFeedback] = useState(null);
+  const [isBuffering, setIsBuffering] = useState(false);
   const lastTap = useRef(null);
+
+  const onPlaybackStatusUpdate = (newStatus) => {
+    setStatus(newStatus);
+    setIsBuffering(newStatus.isBuffering);
+  };
 
   useEffect(() => {
     if (!isActive || !isFocused) {
@@ -121,8 +128,16 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           isLooping={false}
           useNativeControls={false}
           isMuted={isMuted}
-          onPlaybackStatusUpdate={setStatus}
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          onLoadStart={() => setIsBuffering(true)}
+          onLoad={() => setIsBuffering(false)}
         />
+        
+        {isBuffering && (
+          <View style={styles.bufferingOverlay}>
+            <ActivityIndicator size="large" color="#0084FF" />
+          </View>
+        )}
         
         {showSeekFeedback && (
           <View style={[styles.seekFeedback, showSeekFeedback === 'left' ? { left: 40 } : { right: 40 }]}>
@@ -133,7 +148,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           </View>
         )}
 
-        {!status.isPlaying && isActive && !showSeekFeedback && (
+        {!status.isPlaying && isActive && !showSeekFeedback && !isBuffering && (
           <View style={styles.playOverlay}>
             <Ionicons name="play" size={70} color="rgba(255,255,255,0.6)" />
           </View>
@@ -282,38 +297,46 @@ export default function ReelsScreen({ route }) {
   return (
     <View style={[styles.container, { backgroundColor: '#000', paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <FlatList
-        ref={flatListRef}
-        data={videoData}
-        renderItem={({ item, index }) => (
-          <VideoItem 
-            item={item}
-            isActive={activeVideoIndex === index}
-            isFocused={isFocused}
-            videoHeight={videoHeight}
-            videoWidth={videoWidth}
-            isCompleted={completedVideos[item.id]}
-            onToggleComplete={toggleComplete}
-          />
-        )}
-        keyExtractor={(item) => item.id}
-        pagingEnabled={true}
-        disableIntervalMomentum={true}
-        showsVerticalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        snapToInterval={videoHeight}
-        snapToAlignment="start"
-        decelerationRate={Platform.OS === 'ios' ? 'fast' : 0.9}
-        getItemLayout={(data, index) => ({
-          length: videoHeight,
-          offset: videoHeight * index,
-          index,
-        })}
-        removeClippedSubviews={Platform.OS !== 'web'}
-        maxToRenderPerBatch={2}
-        windowSize={3}
-      />
+      
+      {videoData.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Ionicons name="videocam-outline" size={80} color="rgba(255,255,255,0.2)" />
+          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 18, marginTop: 20 }}>More reels coming soon...</Text>
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={videoData}
+          renderItem={({ item, index }) => (
+            <VideoItem 
+              item={item}
+              isActive={activeVideoIndex === index}
+              isFocused={isFocused}
+              videoHeight={videoHeight}
+              videoWidth={videoWidth}
+              isCompleted={completedVideos[item.id]}
+              onToggleComplete={toggleComplete}
+            />
+          )}
+          keyExtractor={(item) => item.id.toString()}
+          pagingEnabled={true}
+          disableIntervalMomentum={true}
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          snapToInterval={videoHeight}
+          snapToAlignment="start"
+          decelerationRate={Platform.OS === 'ios' ? 'fast' : 0.9}
+          getItemLayout={(data, index) => ({
+            length: videoHeight,
+            offset: videoHeight * index,
+            index,
+          })}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+        />
+      )}
     </View>
   );
 }
@@ -344,4 +367,5 @@ const styles = StyleSheet.create({
   mainPlayBtn: { backgroundColor: 'rgba(255,255,255,0.1)', width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 5 },
   topGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   bottomGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 180 },
+  bufferingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', zIndex: 15 },
 });
