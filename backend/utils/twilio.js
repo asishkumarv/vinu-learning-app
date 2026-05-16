@@ -12,7 +12,7 @@ const sendOTP = async (mobile, otp) => {
     const message = await client.messages.create({
       body: `Your Vinu Learning App verification code is: ${otp}`,
       from: fromWhatsApp,
-      to: `whatsapp:${mobile}`,
+      to: `whatsapp:+91${mobile}`,
     });
     return message;
   } catch (error) {
