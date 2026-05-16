@@ -33,7 +33,7 @@ exports.getEpisodesByChapter = async (req, res) => {
   try {
     const { chapterId } = req.params;
     const result = await db.query(
-      'SELECT id, chapter_id, title, thumbnail_url, duration, is_recent, created_at FROM episodes WHERE chapter_id = $1 ORDER BY id',
+      'SELECT id, chapter_id, title, thumbnail_url, video_url, duration, is_recent, created_at FROM episodes WHERE chapter_id = $1 ORDER BY id',
       [chapterId]
     );
     res.json(result.rows);
@@ -45,7 +45,7 @@ exports.getEpisodesByChapter = async (req, res) => {
 exports.getRecentReleases = async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT e.id, e.chapter_id, e.title, e.thumbnail_url, e.duration, e.is_recent, s.name as subject_name FROM episodes e JOIN chapters c ON e.chapter_id = c.id JOIN subjects s ON c.subject_id = s.id WHERE e.is_recent = TRUE ORDER BY e.created_at DESC LIMIT 10'
+      'SELECT e.id, e.chapter_id, e.title, e.thumbnail_url, e.video_url, e.duration, e.is_recent, s.name as subject_name FROM episodes e JOIN chapters c ON e.chapter_id = c.id JOIN subjects s ON c.subject_id = s.id WHERE e.is_recent = TRUE ORDER BY e.created_at DESC LIMIT 10'
     );
     res.json(result.rows);
   } catch (error) {
@@ -59,15 +59,24 @@ exports.streamVideo = async (req, res) => {
     
     // 1. Get video metadata and size first (very fast)
     const metaResult = await db.query(
-      'SELECT octet_length(video_data) as size, content_type FROM episodes WHERE id = $1', 
+      'SELECT octet_length(video_data) as size, content_type, video_url FROM episodes WHERE id = $1', 
       [episodeId]
     );
-
-    if (metaResult.rows.length === 0 || !metaResult.rows[0].size) {
+    
+    if (metaResult.rows.length === 0) {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    const { size: videoSize, content_type } = metaResult.rows[0];
+    const { size: videoSize, content_type, video_url } = metaResult.rows[0];
+
+    // If Cloudinary URL exists, redirect to it
+    if (video_url) {
+        return res.redirect(video_url);
+    }
+
+    if (!videoSize) {
+        return res.status(404).json({ error: 'Video content not available' });
+    }
     const range = req.headers.range;
 
     if (range) {

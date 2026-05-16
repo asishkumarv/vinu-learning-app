@@ -28,7 +28,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   const [status, setStatus] = useState({});
   const [isMuted, setIsMuted] = useState(false);
   const [showSeekFeedback, setShowSeekFeedback] = useState(null);
-  const [isBuffering, setIsBuffering] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const lastTap = useRef(null);
 
   useEffect(() => {
@@ -48,7 +48,12 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
 
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
-    setIsBuffering(newStatus.isBuffering || !newStatus.isLoaded);
+    // Explicitly update loading state
+    if (newStatus.isBuffering || !newStatus.isLoaded) {
+      if (!isLoading) setIsLoading(true);
+    } else {
+      if (isLoading) setIsLoading(false);
+    }
   };
 
   const handleVideoTap = (event) => {
@@ -74,10 +79,6 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
     } else {
       videoRef.current?.playAsync();
     }
-  };
-
-  const toggleFullscreen = () => {
-    videoRef.current?.presentFullscreenPlayer();
   };
 
   const seek = async (amount, direction) => {
@@ -114,13 +115,15 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   };
 
   const progress = (status.positionMillis / status.durationMillis) * 100 || 0;
+  const controlsBottom = 110;
 
   return (
     <View style={[styles.videoContainer, { height: videoHeight, width: videoWidth }]}>
       <Pressable onPress={handleVideoTap} style={styles.videoWrapper}>
         <Video
+          key={item.video_url || item.id}
           ref={videoRef}
-          source={{ uri: contentApi.getVideoUrl(item.id) }}
+          source={{ uri: item.video_url ? item.video_url : contentApi.getVideoUrl(item.id) }}
           style={styles.video}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={isActive && isFocused}
@@ -128,17 +131,11 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           useNativeControls={false}
           isMuted={isMuted}
           onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          onLoadStart={() => setIsBuffering(true)}
-          onLoad={() => setIsBuffering(false)}
+          onLoadStart={() => setIsLoading(true)}
+          onLoad={() => setIsLoading(false)}
+          onError={() => setIsLoading(false)}
         />
         
-        {isBuffering && isActive && (
-          <View style={styles.bufferingOverlay}>
-            <ActivityIndicator size="large" color="#0084FF" />
-            <Text style={{ color: '#0084FF', marginTop: 10, fontWeight: '600' }}>Loading...</Text>
-          </View>
-        )}
-
         {showSeekFeedback && (
           <View style={[styles.seekFeedback, showSeekFeedback === 'left' ? { left: 40 } : { right: 40 }]}>
             <View style={styles.seekCircle}>
@@ -148,14 +145,15 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           </View>
         )}
 
-        {!status.isPlaying && isActive && !showSeekFeedback && !isBuffering && (
+        {!status.isPlaying && isActive && !showSeekFeedback && !isLoading && (
           <View style={styles.playOverlay}>
             <Ionicons name="play" size={70} color="rgba(255,255,255,0.6)" />
           </View>
         )}
       </Pressable>
       
-      {(!status.isPlaying || !isActive) && !isBuffering && (
+      {/* HUD AND CONTROLS */}
+      {(!status.isPlaying || !isActive) && !isLoading && (
         <View style={styles.hudContainer} pointerEvents="box-none">
           <LinearGradient
             colors={['rgba(0,0,0,0.6)', 'transparent']}
@@ -182,7 +180,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
             pointerEvents="none"
           />
 
-          <View style={[styles.controlBar, { bottom: 100 + (safeAreaInsets?.bottom || 0) }]} pointerEvents="box-none">
+          <View style={[styles.controlBar, { bottom: controlsBottom + (safeAreaInsets?.bottom || 0) }]} pointerEvents="box-none">
             <View style={styles.timerRow}>
               <Text style={styles.timeLabel}>{formatTime(status.positionMillis)}</Text>
               <Pressable onPress={handleTimelinePress} style={styles.progressBarContainer}>
@@ -205,10 +203,18 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
               <TouchableOpacity onPress={() => seek(10000, 'right')} style={styles.iconBtn}>
                 <Ionicons name="play-forward" size={24} color="#FFF" />
               </TouchableOpacity>
-              <TouchableOpacity onPress={toggleFullscreen} style={styles.iconBtn}>
-                <Ionicons name="expand" size={22} color="#FFF" />
-              </TouchableOpacity>
+              <View style={{ width: 44 }} /> 
             </View>
+          </View>
+        </View>
+      )}
+
+      {/* GLOBAL LOADING OVERLAY FOR THIS ITEM - ALWAYS ON TOP */}
+      {isLoading && (
+        <View style={styles.bufferingOverlay} pointerEvents="none">
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="large" color="#0084FF" />
+            <Text style={styles.loaderText}>Buffering...</Text>
           </View>
         </View>
       )}
@@ -216,13 +222,13 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   );
 });
 
-export default function ReelsScreen({ route }) {
+export default function ReelsScreen({ route, navigation }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const bottomTabHeight = 85;
-  
-  const videoHeight = windowHeight - bottomTabHeight - insets.top;
+
+  const videoHeight = (windowHeight - bottomTabHeight - insets.top);
   const videoWidth = windowWidth;
 
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
@@ -275,7 +281,7 @@ export default function ReelsScreen({ route }) {
     }
   }).current;
 
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 30 }).current;
 
   const initialIndex = route.params?.videoId && videoData.length > 0 
     ? videoData.findIndex(v => Number(v.id) === Number(route.params.videoId)) 
@@ -333,7 +339,7 @@ const styles = StyleSheet.create({
   video: { width: '100%', height: '100%' },
   hudContainer: { ...StyleSheet.absoluteFillObject, zIndex: 10 },
   playOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 5 },
-  seekFeedback: { position: 'absolute', top: '40%', alignItems: 'center', zIndex: 10 },
+  seekFeedback: { position: 'absolute', top: '40%', alignItems: 'center', zIndex: 20 },
   seekCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   seekText: { color: '#FFF', fontSize: 14, fontWeight: 'bold', marginTop: 8 },
   topOverlay: { position: 'absolute', top: 20, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -352,5 +358,26 @@ const styles = StyleSheet.create({
   mainPlayBtn: { backgroundColor: 'rgba(255,255,255,0.1)', width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 5 },
   topGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   bottomGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 180 },
-  bufferingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 15 },
+  bufferingOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(0,0,0,0.3)', 
+    zIndex: 100,
+    elevation: 10,
+  },
+  loaderBox: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 20,
+    borderRadius: 15,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  loaderText: {
+    color: '#0084FF',
+    marginTop: 12,
+    fontWeight: 'bold',
+    fontSize: 16,
+  }
 });
