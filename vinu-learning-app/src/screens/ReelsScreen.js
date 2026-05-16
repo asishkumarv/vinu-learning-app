@@ -19,12 +19,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { contentApi, progressApi } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import UnlockModal from '../components/UnlockModal';
 
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
-const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete }) => {
+const VideoItem = memo(({ item, index, totalCount, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal }) => {
   const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
+  
+  const isFree = index < Math.ceil(totalCount * 0.3);
+  const isLocked = !isFree && !isUnlocked;
   const [status, setStatus] = useState({});
   const [isMuted, setIsMuted] = useState(false);
   const [showSeekFeedback, setShowSeekFeedback] = useState(null);
@@ -34,7 +39,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
   useEffect(() => {
     const handlePlayPause = async () => {
       try {
-        if (isActive && isFocused) {
+        if (isActive && isFocused && !isLocked) {
           await videoRef.current?.playAsync();
         } else {
           await videoRef.current?.pauseAsync();
@@ -44,7 +49,7 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
       }
     };
     handlePlayPause();
-  }, [isActive, isFocused]);
+  }, [isActive, isFocused, isLocked]);
 
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
@@ -124,17 +129,34 @@ const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, is
           key={item.video_url || item.id}
           ref={videoRef}
           source={{ uri: item.video_url ? item.video_url : contentApi.getVideoUrl(item.id) }}
-          style={styles.video}
+          style={[styles.video, isLocked && { opacity: 0.3 }]}
           resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={isActive && isFocused}
+          shouldPlay={isActive && isFocused && !isLocked}
           isLooping={false}
           useNativeControls={false}
           isMuted={isMuted}
           onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          onLoadStart={() => setIsLoading(true)}
+          onLoadStart={() => !isLocked && setIsLoading(true)}
           onLoad={() => setIsLoading(false)}
           onError={() => setIsLoading(false)}
         />
+        
+        {isLocked && (
+          <View style={styles.lockedPlayerOverlay}>
+            <View style={styles.lockCircle}>
+              <Ionicons name="lock-closed" size={50} color="#FFF" />
+            </View>
+            <Text style={styles.lockedText}>This lesson is locked</Text>
+            <TouchableOpacity style={styles.unlockButton} onPress={() => onOpenUnlockModal(item)}>
+              <LinearGradient
+                colors={['#00A8FF', '#007AFF']}
+                style={styles.unlockGradient}
+              >
+                <Text style={styles.unlockBtnText}>Watch Ad to Unlock</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
         
         {showSeekFeedback && (
           <View style={[styles.seekFeedback, showSeekFeedback === 'left' ? { left: 40 } : { right: 40 }]}>
@@ -234,12 +256,36 @@ export default function ReelsScreen({ route, navigation }) {
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   const [completedVideos, setCompletedVideos] = useState({});
   const [videoData, setVideoData] = useState([]);
+  const [unlockedVideos, setUnlockedVideos] = useState({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedVideoToUnlock, setSelectedVideoToUnlock] = useState(null);
   const flatListRef = useRef(null);
 
   useEffect(() => {
     fetchVideos();
     fetchUserProgress();
+    loadUnlockedVideos();
   }, []);
+
+  const loadUnlockedVideos = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('unlockedVideos');
+      if (stored) setUnlockedVideos(JSON.parse(stored));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleUnlockSuccess = async () => {
+    if (!selectedVideoToUnlock) return;
+    const newUnlocked = { ...unlockedVideos, [selectedVideoToUnlock.id]: true };
+    setUnlockedVideos(newUnlocked);
+    await AsyncStorage.setItem('unlockedVideos', JSON.stringify(newUnlocked));
+    setModalVisible(false);
+  };
+
+  const openUnlockModal = (video) => {
+    setSelectedVideoToUnlock(video);
+    setModalVisible(true);
+  };
 
   const fetchVideos = async () => {
     try {
@@ -303,12 +349,16 @@ export default function ReelsScreen({ route, navigation }) {
           renderItem={({ item, index }) => (
             <VideoItem 
               item={item}
+              index={index}
+              totalCount={videoData.length}
               isActive={activeVideoIndex === index}
               isFocused={isFocused}
               videoHeight={videoHeight}
               videoWidth={videoWidth}
               isCompleted={completedVideos[item.id]}
               onToggleComplete={toggleComplete}
+              isUnlocked={unlockedVideos[item.id]}
+              onOpenUnlockModal={openUnlockModal}
             />
           )}
           keyExtractor={(item) => item.id.toString()}
@@ -328,6 +378,13 @@ export default function ReelsScreen({ route, navigation }) {
           windowSize={3}
         />
       )}
+
+      <UnlockModal 
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onUnlock={handleUnlockSuccess}
+        videoTitle={selectedVideoToUnlock?.title}
+      />
     </View>
   );
 }
@@ -379,5 +436,46 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontWeight: 'bold',
     fontSize: 16,
-  }
+  },
+  lockedPlayerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  lockCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  lockedText: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 30,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 5,
+  },
+  unlockButton: {
+    borderRadius: 30,
+    overflow: 'hidden',
+    elevation: 5,
+  },
+  unlockGradient: {
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+  },
+  unlockBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });

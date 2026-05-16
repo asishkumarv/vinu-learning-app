@@ -16,6 +16,8 @@ import { useTheme } from '../theme/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { contentApi } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import UnlockModal from '../components/UnlockModal';
 
 const { width } = Dimensions.get('window');
 
@@ -27,14 +29,24 @@ export default function HomeScreen({ navigation }) {
   const [expandedClass, setExpandedClass] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
-  const [videos, setVideos] = useState([]);
   const [releases, setReleases] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [unlockedVideos, setUnlockedVideos] = useState({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedVideoToUnlock, setSelectedVideoToUnlock] = useState(null);
 
   useEffect(() => {
     fetchClasses();
     fetchRecentReleases();
+    loadUnlockedVideos();
   }, []);
+
+  const loadUnlockedVideos = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('unlockedVideos');
+      if (stored) setUnlockedVideos(JSON.parse(stored));
+    } catch (e) { console.error(e); }
+  };
 
   const fetchClasses = async () => {
     try {
@@ -101,8 +113,25 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const goToVideos = (videoId) => {
-    navigation.navigate('Videos', { videoId });
+  const goToVideos = (video, index, allVideosInChapter) => {
+    const isFree = index < Math.ceil(allVideosInChapter.length * 0.3);
+    const isUnlocked = unlockedVideos[video.id];
+
+    if (!isFree && !isUnlocked) {
+      setSelectedVideoToUnlock({ ...video, index, allVideosInChapter });
+      setModalVisible(true);
+      return;
+    }
+    navigation.navigate('Videos', { videoId: video.id });
+  };
+
+  const handleUnlockSuccess = async () => {
+    if (!selectedVideoToUnlock) return;
+    const newUnlocked = { ...unlockedVideos, [selectedVideoToUnlock.id]: true };
+    setUnlockedVideos(newUnlocked);
+    await AsyncStorage.setItem('unlockedVideos', JSON.stringify(newUnlocked));
+    setModalVisible(false);
+    navigation.navigate('Videos', { videoId: selectedVideoToUnlock.id });
   };
 
   const renderStateTab = (name, color) => (
@@ -208,24 +237,36 @@ export default function HomeScreen({ navigation }) {
                            Lessons
                         </Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {videos.map((video) => (
-                            <TouchableOpacity 
-                              key={video.id} 
-                              style={[styles.subjectVideoCard, { backgroundColor: colors.chip }]}
-                              onPress={() => goToVideos(video.id)}
-                            >
-                              <Image 
-                                source={{ uri: video.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
-                                style={styles.subjectVideoImage} 
-                              />
-                              <Text style={[styles.subjectVideoTitle, { color: colors.text }]} numberOfLines={1}>
-                                {video.title}
-                              </Text>
-                              <View style={styles.playIconOverlay}>
-                                <Ionicons name="play" size={20} color="#FFF" />
-                              </View>
-                            </TouchableOpacity>
-                          ))}
+                          {videos.map((video, index) => {
+                            const isFree = index < Math.ceil(videos.length * 0.3);
+                            const isUnlocked = unlockedVideos[video.id];
+                            const isLocked = !isFree && !isUnlocked;
+
+                            return (
+                              <TouchableOpacity 
+                                key={video.id} 
+                                style={[styles.subjectVideoCard, { backgroundColor: colors.chip }]}
+                                onPress={() => goToVideos(video, index, videos)}
+                              >
+                                <Image 
+                                  source={{ uri: video.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
+                                  style={[styles.subjectVideoImage, isLocked && { opacity: 0.6 }]} 
+                                />
+                                <Text style={[styles.subjectVideoTitle, { color: colors.text }]} numberOfLines={1}>
+                                  {video.title}
+                                </Text>
+                                <View style={styles.playIconOverlay}>
+                                  <Ionicons name={isLocked ? "lock-closed" : "play"} size={isLocked ? 18 : 20} color="#FFF" />
+                                </View>
+                                {isLocked && (
+                                  <View style={styles.lockBadge}>
+                                    <Ionicons name="lock-closed" size={10} color="#FFF" />
+                                    <Text style={styles.lockBadgeText}>AD</Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
                           {videos.length === 0 && !loading && (
                              <View style={styles.comingSoonLesson}>
                                <Ionicons name="time-outline" size={24} color={colors.textSecondary} />
@@ -267,6 +308,12 @@ export default function HomeScreen({ navigation }) {
           />
         </View>
       </ScrollView>
+      <UnlockModal 
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onUnlock={handleUnlockSuccess}
+        videoTitle={selectedVideoToUnlock?.title}
+      />
     </View>
   );
 }
@@ -308,4 +355,6 @@ const styles = StyleSheet.create({
   comingSoonContainer: { alignItems: 'center', padding: 30, opacity: 0.7 },
   comingSoonText: { fontSize: 16, marginTop: 10, fontWeight: '500' },
   comingSoonLesson: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 12, marginVertical: 10 },
+  lockBadge: { position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.6)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
+  lockBadgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold', marginLeft: 3 },
 });
