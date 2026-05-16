@@ -4,7 +4,7 @@
     "slug": "vinu-learning-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logo.jpeg",
+    "icon": "./assets/logo.png",
     "scheme": "vinulearningapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,21 +14,22 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/logo.jpeg"
+        "foregroundImage": "./assets/logo.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.asishkumarv.vinulearningapp"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/logo.jpeg"
+      "favicon": "./assets/logo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/logo.jpeg",
+          "image": "./assets/logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -41,6 +42,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": ""
+      }
     }
   }
 }

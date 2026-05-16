@@ -16,7 +16,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { contentApi, progressApi } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +24,7 @@ import UnlockModal from '../components/UnlockModal';
 
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
-const VideoItem = memo(({ item, index, totalCount, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal, autoPlay, onAutoNext }) => {
+const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal, autoPlay, onAutoNext }) => {
   const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
   
@@ -54,8 +54,10 @@ const VideoItem = memo(({ item, index, totalCount, isActive, isFocused, videoHei
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
     if (newStatus.didJustFinish) {
+      console.log('Video finished:', item.title);
       onToggleComplete(item.id, 'completed');
       if (autoPlay) {
+        console.log('Auto-playing next...');
         const nextIndex = index + 1;
         if (nextIndex < totalCount) {
           onAutoNext?.(nextIndex);
@@ -250,7 +252,7 @@ const VideoItem = memo(({ item, index, totalCount, isActive, isFocused, videoHei
       )}
     </View>
   );
-});
+};
 
 export default function ReelsScreen({ route, navigation }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -276,6 +278,13 @@ export default function ReelsScreen({ route, navigation }) {
     loadUnlockedVideos();
     loadSettings();
   }, [route.params?.videoId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSettings();
+      return () => {};
+    }, [])
+  );
 
   const loadSettings = async () => {
     try {
@@ -378,6 +387,8 @@ export default function ReelsScreen({ route, navigation }) {
           renderItem={({ item, index }) => (
             <VideoItem 
               item={item}
+              index={index}
+              totalCount={videoData.length}
               isActive={activeVideoIndex === index}
               isFocused={isFocused}
               videoHeight={videoHeight}
@@ -388,7 +399,10 @@ export default function ReelsScreen({ route, navigation }) {
               onOpenUnlockModal={openUnlockModal}
               autoPlay={autoPlay}
               onAutoNext={(nextIndex) => {
-                flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                setActiveVideoIndex(nextIndex);
+                setTimeout(() => {
+                  flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                }, 100);
               }}
             />
           )}
