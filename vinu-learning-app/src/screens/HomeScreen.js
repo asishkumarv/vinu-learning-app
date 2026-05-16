@@ -29,6 +29,7 @@ export default function HomeScreen({ navigation }) {
   const [expandedClass, setExpandedClass] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
+  const [videos, setVideos] = useState([]);
   const [releases, setReleases] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockedVideos, setUnlockedVideos] = useState({});
@@ -113,12 +114,12 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const goToVideos = (video, index, allVideosInChapter) => {
-    const isFree = index < Math.ceil(allVideosInChapter.length * 0.3);
+  const goToVideos = (video) => {
+    const isFree = video.is_free;
     const isUnlocked = unlockedVideos[video.id];
 
     if (!isFree && !isUnlocked) {
-      setSelectedVideoToUnlock({ ...video, index, allVideosInChapter });
+      setSelectedVideoToUnlock(video);
       setModalVisible(true);
       return;
     }
@@ -237,8 +238,8 @@ export default function HomeScreen({ navigation }) {
                            Lessons
                         </Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {videos.map((video, index) => {
-                            const isFree = index < Math.ceil(videos.length * 0.3);
+                          {videos.map((video) => {
+                            const isFree = video.is_free;
                             const isUnlocked = unlockedVideos[video.id];
                             const isLocked = !isFree && !isUnlocked;
 
@@ -246,7 +247,7 @@ export default function HomeScreen({ navigation }) {
                               <TouchableOpacity 
                                 key={video.id} 
                                 style={[styles.subjectVideoCard, { backgroundColor: colors.chip }]}
-                                onPress={() => goToVideos(video, index, videos)}
+                                onPress={() => goToVideos(video)}
                               >
                                 <Image 
                                   source={{ uri: video.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 

@@ -33,7 +33,7 @@ exports.getEpisodesByChapter = async (req, res) => {
   try {
     const { chapterId } = req.params;
     const result = await db.query(
-      'SELECT id, chapter_id, title, thumbnail_url, video_url, duration, is_recent, created_at FROM episodes WHERE chapter_id = $1 ORDER BY id',
+      'SELECT id, chapter_id, title, thumbnail_url, video_url, duration, is_free, is_recent, created_at FROM episodes WHERE chapter_id = $1 ORDER BY id',
       [chapterId]
     );
     res.json(result.rows);
@@ -45,7 +45,7 @@ exports.getEpisodesByChapter = async (req, res) => {
 exports.getRecentReleases = async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT e.id, e.chapter_id, e.title, e.thumbnail_url, e.video_url, e.duration, e.is_recent, s.name as subject_name FROM episodes e JOIN chapters c ON e.chapter_id = c.id JOIN subjects s ON c.subject_id = s.id WHERE e.is_recent = TRUE ORDER BY e.created_at DESC LIMIT 10'
+      'SELECT e.id, e.chapter_id, e.title, e.thumbnail_url, e.video_url, e.duration, e.is_free, e.is_recent, s.name as subject_name FROM episodes e JOIN chapters c ON e.chapter_id = c.id JOIN subjects s ON c.subject_id = s.id WHERE e.is_recent = TRUE ORDER BY e.created_at DESC LIMIT 10'
     );
     res.json(result.rows);
   } catch (error) {

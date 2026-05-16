@@ -24,11 +24,11 @@ import UnlockModal from '../components/UnlockModal';
 
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
-const VideoItem = memo(({ item, index, totalCount, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal }) => {
+const VideoItem = memo(({ item, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal }) => {
   const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
   
-  const isFree = index < Math.ceil(totalCount * 0.3);
+  const isFree = item.is_free;
   const isLocked = !isFree && !isUnlocked;
   const [status, setStatus] = useState({});
   const [isMuted, setIsMuted] = useState(false);
@@ -349,8 +349,6 @@ export default function ReelsScreen({ route, navigation }) {
           renderItem={({ item, index }) => (
             <VideoItem 
               item={item}
-              index={index}
-              totalCount={videoData.length}
               isActive={activeVideoIndex === index}
               isFocused={isFocused}
               videoHeight={videoHeight}
