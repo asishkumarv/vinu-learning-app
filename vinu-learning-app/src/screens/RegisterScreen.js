@@ -22,18 +22,11 @@ export default function RegisterScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [fullName, setFullName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!fullName || !mobileNumber || !password || !confirmPassword) {
+    if (!fullName || !mobileNumber) {
       Toast.show({ type: 'error', text1: 'Please fill all fields' });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Toast.show({ type: 'error', text1: 'Passwords do not match' });
       return;
     }
 
@@ -41,8 +34,7 @@ export default function RegisterScreen({ navigation }) {
     try {
       await authApi.register({ 
         name: fullName, 
-        mobile: mobileNumber, 
-        password 
+        mobile: mobileNumber
       });
       Toast.show({ type: 'success', text1: 'OTP sent to WhatsApp' });
       navigation.navigate('Otp', { mobile: mobileNumber });
@@ -91,23 +83,7 @@ export default function RegisterScreen({ navigation }) {
             onChangeText={setMobileNumber}
           />
 
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
-            value={password}
-            onChangeText={setPassword}
-          />
 
-          <TextInput
-            placeholder="Confirm Password"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-          />
 
           <TouchableOpacity
             style={styles.buttonContainer}

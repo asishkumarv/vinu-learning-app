@@ -22,29 +22,22 @@ export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [mobile, setMobile] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!mobile || !password) {
-      Toast.show({ type: 'error', text1: 'Please fill all fields' });
+    if (!mobile) {
+      Toast.show({ type: 'error', text1: 'Please enter your mobile number' });
       return;
     }
 
     setLoading(true);
     try {
       console.log('Login: Attempting login for', mobile);
-      const response = await authApi.login({ mobile, password });
+      await authApi.login({ mobile });
       
-      if (response.data && response.data.token) {
-        console.log('Login: Success, saving token...');
-        await AsyncStorage.setItem('userToken', response.data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-        console.log('Login: Navigating to Main');
-        navigation.replace('Main');
-      } else {
-        throw new Error('Invalid response from server');
-      }
+      console.log('Login: Success sending OTP, navigating to OtpScreen...');
+      Toast.show({ type: 'success', text1: 'OTP sent to WhatsApp' });
+      navigation.navigate('Otp', { mobile });
     } catch (error) {
       console.error('Login Error:', error);
       let errorMsg = 'Something went wrong';
@@ -91,18 +84,7 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setMobile}
           />
 
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
-            value={password}
-            onChangeText={setPassword}
-          />
 
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={{ color: colors.primary }}>Forgot Password?</Text>
-          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.buttonContainer}
@@ -113,7 +95,7 @@ export default function LoginScreen({ navigation }) {
               colors={['#0084FF', '#0055FF']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Login'}</Text>
+              <Text style={styles.buttonText}>{loading ? 'Sending OTP...' : 'Send OTP'}</Text>
             </LinearGradient>
           </TouchableOpacity>
 

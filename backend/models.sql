@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- Table: classes
 CREATE TABLE IF NOT EXISTS classes (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(50) NOT NULL
+    name VARCHAR(50) NOT NULL,
+    section VARCHAR(50) DEFAULT 'AP school'
 );
 
 -- Table: subjects

@@ -8,7 +8,11 @@ const otps = new Map();
 
 exports.register = async (req, res) => {
   try {
-    const { mobile, name, password } = req.body;
+    const { mobile, name } = req.body;
+
+    if (!mobile || !name) {
+      return res.status(400).json({ error: 'Mobile and name are required' });
+    }
 
     // Check if user exists
     const userExist = await db.query('SELECT * FROM users WHERE mobile = $1', [mobile]);
@@ -18,7 +22,7 @@ exports.register = async (req, res) => {
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otps.set(mobile, { otp, name, password, expires: Date.now() + 600000 }); // 10 mins
+    otps.set(mobile, { otp, name, type: 'register', expires: Date.now() + 600000 }); // 10 mins
 
     // Send OTP via WhatsApp
     await sendOTP(mobile, otp);
@@ -39,25 +43,39 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(stored.password, 10);
+    let user;
 
-    // Create user
-    const newUser = await db.query(
-      'INSERT INTO users (mobile, name, password) VALUES ($1, $2, $3) RETURNING id, name, mobile',
-      [mobile, stored.name, hashedPassword]
-    );
+    if (stored.type === 'register') {
+      // Create user (password is null)
+      const newUser = await db.query(
+        'INSERT INTO users (mobile, name) VALUES ($1, $2) RETURNING id, name, mobile',
+        [mobile, stored.name]
+      );
+      user = newUser.rows[0];
+    } else if (stored.type === 'login') {
+      // Fetch existing user
+      const existingUser = await db.query(
+        'SELECT id, name, mobile FROM users WHERE mobile = $1',
+        [mobile]
+      );
+      if (existingUser.rows.length === 0) {
+        return res.status(404).json({ error: 'User record not found' });
+      }
+      user = existingUser.rows[0];
+    } else {
+      return res.status(400).json({ error: 'Invalid OTP type' });
+    }
 
     // Clear OTP
     otps.delete(mobile);
 
     // Generate JWT
-    const token = jwt.sign({ id: newUser.rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-    res.status(201).json({
-      message: 'User registered successfully',
+    res.status(200).json({
+      message: stored.type === 'register' ? 'User registered successfully' : 'Login successful',
       token,
-      user: newUser.rows[0],
+      user,
     });
   } catch (error) {
     console.error(error);
@@ -67,29 +85,25 @@ exports.verifyOtp = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { mobile, password } = req.body;
+    const { mobile } = req.body;
 
-    const user = await db.query('SELECT * FROM users WHERE mobile = $1', [mobile]);
+    if (!mobile) {
+      return res.status(400).json({ error: 'Mobile number is required' });
+    }
+
+    const user = await db.query('SELECT id, name, mobile FROM users WHERE mobile = $1', [mobile]);
     if (user.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found. Please register first.' });
     }
 
-    const validPassword = await bcrypt.compare(password, user.rows[0].password);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid password' });
-    }
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    otps.set(mobile, { otp, type: 'login', expires: Date.now() + 600000 }); // 10 mins
 
-    const token = jwt.sign({ id: user.rows[0].id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    // Send OTP via WhatsApp
+    await sendOTP(mobile, otp);
 
-    res.status(200).json({
-      message: 'Login successful',
-      token,
-      user: {
-        id: user.rows[0].id,
-        name: user.rows[0].name,
-        mobile: user.rows[0].mobile,
-      },
-    });
+    res.status(200).json({ message: 'OTP sent to WhatsApp' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Login failed' });

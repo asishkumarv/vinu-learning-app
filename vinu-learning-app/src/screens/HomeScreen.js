@@ -24,7 +24,7 @@ const { width } = Dimensions.get('window');
 export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [activeState, setActiveState] = useState('AP');
+  const [activeState, setActiveState] = useState('AP school');
   const [classes, setClasses] = useState([]);
   const [expandedClass, setExpandedClass] = useState(null);
   const [subjects, setSubjects] = useState([]);
@@ -174,25 +174,31 @@ export default function HomeScreen({ navigation }) {
             <ThemeToggle />
           </View>
 
-          <View style={styles.tabsContainer}>
-            {renderStateTab('AP', '#00C2FF')}
-            {renderStateTab('Telangana', '#FF5C00')}
-            {renderStateTab('General', '#00FF47')}
-          </View>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.tabsScrollView}
+            contentContainerStyle={styles.tabsContentContainer}
+          >
+            {renderStateTab('AP school', '#00C2FF')}
+            {renderStateTab('Telangana school', '#FF5C00')}
+            {renderStateTab('Intermediate', '#FF007F')}
+            {renderStateTab('Life Skills', '#00FF47')}
+          </ScrollView>
         </LinearGradient>
 
         <View style={styles.content}>
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Select Class</Text>
             
-            {classes.length === 0 && !loading && (
+            {classes.filter(cls => cls.section === activeState).length === 0 && !loading && (
                <View style={styles.comingSoonContainer}>
                  <Ionicons name="construct-outline" size={40} color={colors.textSecondary} />
                  <Text style={[styles.comingSoonText, { color: colors.textSecondary }]}>Classes coming soon...</Text>
                </View>
             )}
 
-            {classes.map((cls) => (
+            {classes.filter(cls => cls.section === activeState).map((cls) => (
               <View key={cls.id}>
                 <TouchableOpacity
                   style={styles.classHeader}
@@ -249,22 +255,25 @@ export default function HomeScreen({ navigation }) {
                                 style={[styles.subjectVideoCard, { backgroundColor: colors.chip }]}
                                 onPress={() => goToVideos(video)}
                               >
-                                <Image 
-                                  source={{ uri: video.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
-                                  style={[styles.subjectVideoImage, isLocked && { opacity: 0.6 }]} 
-                                />
+                                <View style={styles.thumbnailContainer}>
+                                  <Image 
+                                    source={{ uri: video.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
+                                    style={[styles.subjectVideoImage, isLocked && { opacity: 0.6 }]} 
+                                    resizeMode="cover"
+                                  />
+                                  <View style={styles.playIconOverlay}>
+                                    <Ionicons name={isLocked ? "lock-closed" : "play"} size={isLocked ? 18 : 20} color="#FFF" />
+                                  </View>
+                                  {isLocked && (
+                                    <View style={styles.lockBadge}>
+                                      <Ionicons name="lock-closed" size={10} color="#FFF" />
+                                      <Text style={styles.lockBadgeText}>AD</Text>
+                                    </View>
+                                  )}
+                                </View>
                                 <Text style={[styles.subjectVideoTitle, { color: colors.text }]} numberOfLines={1}>
                                   {video.title}
                                 </Text>
-                                <View style={styles.playIconOverlay}>
-                                  <Ionicons name={isLocked ? "lock-closed" : "play"} size={isLocked ? 18 : 20} color="#FFF" />
-                                </View>
-                                {isLocked && (
-                                  <View style={styles.lockBadge}>
-                                    <Ionicons name="lock-closed" size={10} color="#FFF" />
-                                    <Text style={styles.lockBadgeText}>AD</Text>
-                                  </View>
-                                )}
                               </TouchableOpacity>
                             );
                           })}
@@ -298,6 +307,7 @@ export default function HomeScreen({ navigation }) {
                 <Image 
                   source={{ uri: item.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
                   style={styles.chapterImage} 
+                  resizeMode="cover"
                 />
                 <View style={styles.chapterInfo}>
                    <Text style={[styles.chapterInfoTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
@@ -328,7 +338,9 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: 'bold', letterSpacing: 1 },
   headerSubtitle: { color: '#FFFFFF', fontSize: 12, opacity: 0.8 },
   tabsContainer: { flexDirection: 'row', justifyContent: 'space-between' },
-  stateTab: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 12, width: '31%' },
+  tabsScrollView: { marginTop: 10 },
+  tabsContentContainer: { paddingRight: 20 },
+  stateTab: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 12, marginRight: 10 },
   activeStateTab: { elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
   stateIcon: { width: 10, height: 10, borderRadius: 2, marginRight: 8 },
   stateTabText: { fontSize: 13, fontWeight: '600' },
@@ -342,15 +354,16 @@ const styles = StyleSheet.create({
   subjectText: { fontSize: 13, fontWeight: '500' },
   videoList: { marginTop: 15, borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 15 },
   videoListTitle: { fontSize: 15, fontWeight: 'bold', marginBottom: 12 },
-  subjectVideoCard: { width: 160, borderRadius: 12, marginRight: 15, overflow: 'hidden', paddingBottom: 10 },
-  subjectVideoImage: { width: '100%', height: 90 },
+  subjectVideoCard: { width: 120, borderRadius: 12, marginRight: 15, overflow: 'hidden', paddingBottom: 10 },
+  thumbnailContainer: { width: '100%', height: 160, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  subjectVideoImage: { width: '100%', height: '100%' },
   subjectVideoTitle: { fontSize: 13, fontWeight: '600', paddingHorizontal: 8, marginTop: 8 },
-  playIconOverlay: { position: 'absolute', top: 30, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  playIconOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.5)', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
   chapterTitle: { fontSize: 18, fontWeight: 'bold', marginLeft: 10 },
   horizontalScroll: { paddingBottom: 25 },
-  chapterCard: { width: width * 0.45, borderRadius: 15, marginRight: 15, overflow: 'hidden', elevation: 2 },
-  chapterImage: { width: '100%', height: 110 },
+  chapterCard: { width: 120, borderRadius: 15, marginRight: 15, overflow: 'hidden', elevation: 2 },
+  chapterImage: { width: '100%', height: 160 },
   chapterInfo: { padding: 10 },
   chapterInfoTitle: { fontSize: 14, fontWeight: 'bold' },
   comingSoonContainer: { alignItems: 'center', padding: 30, opacity: 0.7 },
