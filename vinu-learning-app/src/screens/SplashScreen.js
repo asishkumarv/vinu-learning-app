@@ -43,7 +43,7 @@ export default function SplashScreen({ navigation }) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <View style={styles.logoWrapper}>
         <Image
-          source={require('../../assets/logo.jpeg')}
+          source={require('../../assets/logo.png')}
           style={styles.logo}
         />
       </View>

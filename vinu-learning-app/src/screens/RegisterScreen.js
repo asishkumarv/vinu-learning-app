@@ -66,7 +66,7 @@ export default function RegisterScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.logoContainer}>
           <Image
-            source={require('../../assets/logo.jpeg')}
+            source={require('../../assets/logo.png')}
             style={styles.logo}
           />
         </View>

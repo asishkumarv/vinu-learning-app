@@ -57,7 +57,7 @@ export default function OtpScreen({ navigation, route }) {
       >
         <View style={styles.logoContainer}>
           <Image
-            source={require('../../assets/logo.jpeg')}
+            source={require('../../assets/logo.png')}
             style={styles.logo}
           />
         </View>
