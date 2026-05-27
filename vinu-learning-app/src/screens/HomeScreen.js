@@ -303,7 +303,7 @@ export default function HomeScreen({ navigation }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalScroll}
             renderItem={({ item }) => (
-              <TouchableOpacity style={[styles.chapterCard, { backgroundColor: colors.surface }]} onPress={() => goToVideos(item.id)}>
+              <TouchableOpacity style={[styles.chapterCard, { backgroundColor: colors.surface }]} onPress={() => goToVideos(item)}>
                 <Image 
                   source={{ uri: item.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
                   style={styles.chapterImage} 
