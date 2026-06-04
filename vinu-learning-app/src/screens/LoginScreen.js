@@ -99,14 +99,7 @@ export default function LoginScreen({ navigation }) {
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Register')}
-            style={styles.registerLink}
-          >
-            <Text style={{ color: colors.textSecondary }}>
-              Don't have an account? <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Register</Text>
-            </Text>
-          </TouchableOpacity>
+
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -168,8 +161,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 18,
   },
-  registerLink: {
-    marginTop: 25,
-    alignItems: 'center',
-  },
+
 });

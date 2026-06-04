@@ -15,29 +15,32 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
-export default function RegisterScreen({ navigation }) {
+export default function RegisterScreen({ navigation, route }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { mobile } = route?.params || {};
   const [fullName, setFullName] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!fullName || !mobileNumber) {
-      Toast.show({ type: 'error', text1: 'Please fill all fields' });
+    if (!fullName) {
+      Toast.show({ type: 'error', text1: 'Please enter your name' });
       return;
     }
 
     setLoading(true);
     try {
-      await authApi.register({ 
+      const response = await authApi.register({ 
         name: fullName, 
-        mobile: mobileNumber
+        mobile: mobile
       });
-      Toast.show({ type: 'success', text1: 'OTP sent to WhatsApp' });
-      navigation.navigate('Otp', { mobile: mobileNumber });
+      await AsyncStorage.setItem('userToken', response.data.token);
+      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+      Toast.show({ type: 'success', text1: 'Profile Created successfully' });
+      navigation.replace('Main');
     } catch (error) {
       Toast.show({ 
         type: 'error', 
@@ -63,7 +66,7 @@ export default function RegisterScreen({ navigation }) {
           />
         </View>
 
-        <Text style={[styles.heading, { color: colors.text }]}>Create Account</Text>
+        <Text style={[styles.heading, { color: colors.text }]}>Complete Profile</Text>
 
         <View style={styles.form}>
           <TextInput
@@ -74,17 +77,6 @@ export default function RegisterScreen({ navigation }) {
             onChangeText={setFullName}
           />
 
-          <TextInput
-            placeholder="Mobile Number"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="phone-pad"
-            style={[styles.input, { backgroundColor: colors.surface, color: colors.text }]}
-            value={mobileNumber}
-            onChangeText={setMobileNumber}
-          />
-
-
-
           <TouchableOpacity
             style={styles.buttonContainer}
             onPress={handleRegister}
@@ -94,17 +86,8 @@ export default function RegisterScreen({ navigation }) {
               colors={['#0084FF', '#0055FF']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>{loading ? 'Sending OTP...' : 'Register'}</Text>
+              <Text style={styles.buttonText}>{loading ? 'Saving...' : 'Complete Profile'}</Text>
             </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Login')}
-            style={styles.loginLink}
-          >
-            <Text style={{ color: colors.textSecondary }}>
-              Already have an account? <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Login</Text>
-            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -163,9 +146,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 18,
-  },
-  loginLink: {
-    marginTop: 25,
-    alignItems: 'center',
   },
 });

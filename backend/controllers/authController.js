@@ -14,20 +14,31 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: 'Mobile and name are required' });
     }
 
-    // Check if user exists
+    const stored = otps.get(mobile);
+    if (!stored || !stored.verified) {
+      return res.status(400).json({ error: 'Mobile number not verified' });
+    }
+
+    // Check if user already exists just in case
     const userExist = await db.query('SELECT * FROM users WHERE mobile = $1', [mobile]);
     if (userExist.rows.length > 0) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otps.set(mobile, { otp, name, type: 'register', expires: Date.now() + 600000 }); // 10 mins
+    // Create user
+    const newUser = await db.query(
+      'INSERT INTO users (mobile, name) VALUES ($1, $2) RETURNING id, name, mobile',
+      [mobile, name]
+    );
+    const user = newUser.rows[0];
 
-    // Send OTP via WhatsApp
-    await sendOTP(mobile, otp);
+    // Clear OTP
+    otps.delete(mobile);
 
-    res.status(200).json({ message: 'OTP sent to WhatsApp' });
+    // Generate JWT
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+    res.status(200).json({ message: 'User registered successfully', token, user });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to register' });
@@ -43,28 +54,27 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    let user;
-
-    if (stored.type === 'register') {
-      // Create user (password is null)
-      const newUser = await db.query(
-        'INSERT INTO users (mobile, name) VALUES ($1, $2) RETURNING id, name, mobile',
-        [mobile, stored.name]
-      );
-      user = newUser.rows[0];
-    } else if (stored.type === 'login') {
-      // Fetch existing user
-      const existingUser = await db.query(
-        'SELECT id, name, mobile FROM users WHERE mobile = $1',
-        [mobile]
-      );
-      if (existingUser.rows.length === 0) {
-        return res.status(404).json({ error: 'User record not found' });
-      }
-      user = existingUser.rows[0];
-    } else {
+    if (stored.type !== 'auth') {
       return res.status(400).json({ error: 'Invalid OTP type' });
     }
+
+    // Check if existing user
+    const existingUser = await db.query(
+      'SELECT id, name, mobile FROM users WHERE mobile = $1',
+      [mobile]
+    );
+
+    if (existingUser.rows.length === 0) {
+      // User doesn't exist, mark as verified and tell frontend to ask for name
+      otps.set(mobile, { ...stored, verified: true });
+      return res.status(200).json({ 
+        message: 'OTP verified, new user', 
+        isNewUser: true 
+      });
+    }
+
+    // User exists, login
+    const user = existingUser.rows[0];
 
     // Clear OTP
     otps.delete(mobile);
@@ -73,7 +83,8 @@ exports.verifyOtp = async (req, res) => {
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
     res.status(200).json({
-      message: stored.type === 'register' ? 'User registered successfully' : 'Login successful',
+      message: 'Login successful',
+      isNewUser: false,
       token,
       user,
     });
@@ -91,14 +102,9 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Mobile number is required' });
     }
 
-    const user = await db.query('SELECT id, name, mobile FROM users WHERE mobile = $1', [mobile]);
-    if (user.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found. Please register first.' });
-    }
-
-    // Generate OTP
+    // Generate OTP for any mobile number (new or existing)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otps.set(mobile, { otp, type: 'login', expires: Date.now() + 600000 }); // 10 mins
+    otps.set(mobile, { otp, type: 'auth', expires: Date.now() + 600000 }); // 10 mins
 
     // Send OTP via WhatsApp
     await sendOTP(mobile, otp);
@@ -106,7 +112,7 @@ exports.login = async (req, res) => {
     res.status(200).json({ message: 'OTP sent to WhatsApp' });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ error: 'Failed to send OTP' });
   }
 };
 

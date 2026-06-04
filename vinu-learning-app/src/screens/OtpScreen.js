@@ -33,10 +33,16 @@ export default function OtpScreen({ navigation, route }) {
     setLoading(true);
     try {
       const response = await authApi.verifyOtp({ mobile, otp });
-      await AsyncStorage.setItem('userToken', response.data.token);
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-      Toast.show({ type: 'success', text1: 'Verification Successful' });
-      navigation.replace('Main');
+      
+      if (response.data.isNewUser) {
+        Toast.show({ type: 'success', text1: 'OTP Verified', text2: 'Please complete your profile' });
+        navigation.replace('Register', { mobile });
+      } else {
+        await AsyncStorage.setItem('userToken', response.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        Toast.show({ type: 'success', text1: 'Verification Successful' });
+        navigation.replace('Main');
+      }
     } catch (error) {
       Toast.show({ 
         type: 'error', 
