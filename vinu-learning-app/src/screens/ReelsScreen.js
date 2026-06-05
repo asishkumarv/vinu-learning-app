@@ -28,8 +28,7 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
   const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
   
-  const isFree = item.is_free;
-  const isLocked = !isFree && !isUnlocked;
+  const isLocked = item.is_free === false && !isUnlocked;
   const [status, setStatus] = useState({});
   const [isMuted, setIsMuted] = useState(false);
   const [showSeekFeedback, setShowSeekFeedback] = useState(null);
@@ -196,7 +195,7 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
           <View style={styles.topOverlay} pointerEvents="box-none">
             <View style={styles.detailsContainer}>
               <Text style={styles.titleText}>{item.title}</Text>
-              <Text style={styles.authorText}>By {item.author || 'Dr. Vinu'}</Text>
+              <Text style={styles.authorText}>By {item.author || 'Dr. Vinuh'}</Text>
             </View>
             <TouchableOpacity 
               style={[styles.completeButton, { backgroundColor: isCompleted ? '#4CAF50' : 'rgba(0,0,0,0.5)' }]}

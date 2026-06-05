@@ -223,7 +223,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.versionText}>Vinu Learning App v1.2.0</Text>
+        <Text style={styles.versionText}>Vinuh Learning App v1.2.0</Text>
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>

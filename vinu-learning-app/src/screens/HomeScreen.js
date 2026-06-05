@@ -115,10 +115,10 @@ export default function HomeScreen({ navigation }) {
   };
 
   const goToVideos = (video) => {
-    const isFree = video.is_free;
     const isUnlocked = unlockedVideos[video.id];
+    const isLocked = video.is_free === false && !isUnlocked;
 
-    if (!isFree && !isUnlocked) {
+    if (isLocked) {
       setSelectedVideoToUnlock(video);
       setModalVisible(true);
       return;
@@ -165,10 +165,10 @@ export default function HomeScreen({ navigation }) {
         >
           <View style={styles.topHeader}>
             <View style={styles.logoContainer}>
-              <Image source={require('../../assets/logo.png')} style={styles.logo} />
+              <Image source={require('../../assets/newlogo1.png')} style={styles.logo} />
               <View>
-                <Text style={styles.headerTitle}>VINU</Text>
-                <Text style={styles.headerSubtitle}>Nerchuko</Text>
+                <Text style={styles.headerTitle}>VINUH</Text>
+                <Text style={styles.headerSubtitle}>Listen & Learn</Text>
               </View>
             </View>
             <ThemeToggle />
@@ -245,9 +245,8 @@ export default function HomeScreen({ navigation }) {
                         </Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                           {videos.map((video) => {
-                            const isFree = video.is_free;
                             const isUnlocked = unlockedVideos[video.id];
-                            const isLocked = !isFree && !isUnlocked;
+                            const isLocked = video.is_free === false && !isUnlocked;
 
                             return (
                               <TouchableOpacity 

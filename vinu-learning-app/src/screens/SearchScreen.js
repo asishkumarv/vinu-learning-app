@@ -6,9 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
 const allVideos = [
-  { id: 'bio1', title: 'Biology Chapter 1', subject: 'Biology', author: 'Dr. Vinu' },
-  { id: 'bio2', title: 'Biology Chapter 2', subject: 'Biology', author: 'Dr. Vinu' },
-  { id: 'bio3', title: 'Biology Chapter 3', subject: 'Biology', author: 'Dr. Vinu' },
+  { id: 'bio1', title: 'Biology Chapter 1', subject: 'Biology', author: 'Dr. Vinuh' },
+  { id: 'bio2', title: 'Biology Chapter 2', subject: 'Biology', author: 'Dr. Vinuh' },
+  { id: 'bio3', title: 'Biology Chapter 3', subject: 'Biology', author: 'Dr. Vinuh' },
   { id: 'phy1', title: 'Physics Chapter 1', subject: 'Physics', author: 'Prof. Sharma' },
   { id: 'phy2', title: 'Physics Chapter 2', subject: 'Physics', author: 'Prof. Sharma' },
   { id: 'phy3', title: 'Physics Chapter 3', subject: 'Physics', author: 'Prof. Sharma' },

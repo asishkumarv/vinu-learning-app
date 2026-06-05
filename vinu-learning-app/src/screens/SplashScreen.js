@@ -43,12 +43,12 @@ export default function SplashScreen({ navigation }) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <View style={styles.logoWrapper}>
         <Image
-          source={require('../../assets/logo.png')}
+          source={require('../../assets/newlogo1.png')}
           style={styles.logo}
         />
       </View>
 
-      <Text style={styles.title}>VINU</Text>
+      <Text style={styles.title}>VINUH</Text>
       <Text style={styles.subtitle}>Smart Learning Platform</Text>
       
       <View style={styles.footer}>
