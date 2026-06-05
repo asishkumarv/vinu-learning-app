@@ -9,6 +9,7 @@ export default function VideosPage() {
   
   const [editingVideo, setEditingVideo] = useState(null);
   const [formData, setFormData] = useState({
+    sectionName: 'AP School',
     className: '',
     subjectName: '',
     chapterName: '',
@@ -60,6 +61,7 @@ export default function VideosPage() {
   const handleEditClick = (video) => {
     setEditingVideo(video);
     setFormData({
+      sectionName: video.section_name || 'AP School',
       className: video.class_name || '',
       subjectName: video.subject_name || '',
       chapterName: video.chapter_name || '',
@@ -72,10 +74,25 @@ export default function VideosPage() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value
-    }));
+    setFormData(prev => {
+      let updates = { [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value };
+      
+      // Cascade clearing
+      if (name === 'sectionName') {
+         updates.className = '';
+         updates.subjectName = '';
+         updates.chapterName = '';
+      }
+      if (name === 'className') {
+         updates.subjectName = '';
+         updates.chapterName = '';
+      }
+      if (name === 'subjectName') {
+         updates.chapterName = '';
+      }
+      
+      return { ...prev, ...updates };
+    });
   };
 
   const handleSave = async (e) => {
@@ -84,6 +101,7 @@ export default function VideosPage() {
     setMessage(null);
 
     const data = new FormData();
+    data.append('sectionName', formData.sectionName);
     data.append('className', formData.className);
     data.append('subjectName', formData.subjectName);
     data.append('chapterName', formData.chapterName);
@@ -106,6 +124,21 @@ export default function VideosPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Cascading Logic
+  const getFilteredClasses = () => {
+    return categories.classes.filter(c => c.section === formData.sectionName);
+  };
+  const getFilteredSubjects = () => {
+    const classObj = getFilteredClasses().find(c => c.name === formData.className);
+    if (!classObj) return [];
+    return categories.subjects.filter(s => s.class_id === classObj.id);
+  };
+  const getFilteredChapters = () => {
+    const subjectObj = getFilteredSubjects().find(s => s.name === formData.subjectName);
+    if (!subjectObj) return [];
+    return categories.chapters.filter(ch => ch.subject_id === subjectObj.id);
   };
 
   if (loading) return <div>Loading videos...</div>;
@@ -220,22 +253,32 @@ export default function VideosPage() {
                 <input type="text" name="title" value={formData.title} onChange={handleInputChange} required />
               </div>
 
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Section</label>
+                <select name="sectionName" value={formData.sectionName} onChange={handleInputChange} required>
+                  <option value="AP School">AP School</option>
+                  <option value="Telangana School">Telangana School</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Lifeskills">Lifeskills</option>
+                </select>
+              </div>
+
               <div className="form-group">
                 <label>Class / Section</label>
-                <input type="text" name="className" list="classes-edit" value={formData.className} onChange={handleInputChange} required />
-                <datalist id="classes-edit">{categories.classes.map(c => <option key={c.id} value={c.name} />)}</datalist>
+                <input type="text" name="className" list="classes-edit" value={formData.className} onChange={handleInputChange} required placeholder="Select or type new..." />
+                <datalist id="classes-edit">{getFilteredClasses().map(c => <option key={c.id} value={c.name} />)}</datalist>
               </div>
 
               <div className="form-group">
                 <label>Subject</label>
-                <input type="text" name="subjectName" list="subjects-edit" value={formData.subjectName} onChange={handleInputChange} required />
-                <datalist id="subjects-edit">{categories.subjects.map(s => <option key={s.id} value={s.name} />)}</datalist>
+                <input type="text" name="subjectName" list="subjects-edit" value={formData.subjectName} onChange={handleInputChange} required disabled={!formData.className} placeholder="Select or type new..." />
+                <datalist id="subjects-edit">{getFilteredSubjects().map(s => <option key={s.id} value={s.name} />)}</datalist>
               </div>
 
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Chapter</label>
-                <input type="text" name="chapterName" list="chapters-edit" value={formData.chapterName} onChange={handleInputChange} required />
-                <datalist id="chapters-edit">{categories.chapters.map(c => <option key={c.id} value={c.name} />)}</datalist>
+                <input type="text" name="chapterName" list="chapters-edit" value={formData.chapterName} onChange={handleInputChange} required disabled={!formData.subjectName} placeholder="Select or type new..." />
+                <datalist id="chapters-edit">{getFilteredChapters().map(c => <option key={c.id} value={c.name} />)}</datalist>
               </div>
 
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>

@@ -82,7 +82,7 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     return res.status(400).json({ error: 'No video file provided' });
   }
 
-  const { className, subjectName, chapterName, title, is_free } = req.body;
+  const { sectionName, className, subjectName, chapterName, title, is_free } = req.body;
   const isFreeBool = is_free === 'true' || is_free === true;
 
   try {
@@ -120,9 +120,9 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     // Get DB objects, create if not exist
     await db.query('BEGIN');
 
-    let classRow = await db.query('SELECT id FROM classes WHERE name = $1', [className]);
+    let classRow = await db.query('SELECT id FROM classes WHERE name = $1 AND section = $2', [className, sectionName]);
     if (classRow.rows.length === 0) {
-      classRow = await db.query('INSERT INTO classes (name) VALUES ($1) RETURNING id', [className]);
+      classRow = await db.query('INSERT INTO classes (name, section) VALUES ($1, $2) RETURNING id', [className, sectionName]);
     }
     const classId = classRow.rows[0].id;
 
@@ -168,7 +168,7 @@ router.get('/videos', async (req, res) => {
         e.id, e.title, e.video_url, e.duration, e.is_free, e.created_at,
         c.name as chapter_name, c.id as chapter_id,
         s.name as subject_name, s.id as subject_id,
-        cl.name as class_name, cl.id as class_id
+        cl.name as class_name, cl.id as class_id, cl.section as section_name
       FROM episodes e
       JOIN chapters c ON e.chapter_id = c.id
       JOIN subjects s ON c.subject_id = s.id
@@ -196,16 +196,16 @@ const extractPublicId = (url) => {
 // PUT update video
 router.put('/videos/:id', upload.single('video'), async (req, res) => {
   const { id } = req.params;
-  const { className, subjectName, chapterName, title, is_free } = req.body;
+  const { sectionName, className, subjectName, chapterName, title, is_free } = req.body;
   const isFreeBool = is_free === 'true' || is_free === true;
 
-  try {
+    try {
     await db.query('BEGIN');
 
     // Handle Category mapping
-    let classRow = await db.query('SELECT id FROM classes WHERE name = $1', [className]);
+    let classRow = await db.query('SELECT id FROM classes WHERE name = $1 AND section = $2', [className, sectionName]);
     if (classRow.rows.length === 0) {
-      classRow = await db.query('INSERT INTO classes (name) VALUES ($1) RETURNING id', [className]);
+      classRow = await db.query('INSERT INTO classes (name, section) VALUES ($1, $2) RETURNING id', [className, sectionName]);
     }
     const classId = classRow.rows[0].id;
 

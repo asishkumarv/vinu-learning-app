@@ -4,12 +4,13 @@ import axios from 'axios';
 export default function UploadPage() {
   const [categories, setCategories] = useState({ classes: [], subjects: [], chapters: [] });
   const [formData, setFormData] = useState({
+    sectionName: 'AP School',
     className: '',
     subjectName: '',
     chapterName: '',
     title: '',
-    is_free: true,
-    video: null
+    is_free: false,
+    videoFile: null
   });
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -30,15 +31,30 @@ export default function UploadPage() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value
-    }));
+    setFormData(prev => {
+      let updates = { [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value };
+      
+      // Cascade clearing
+      if (name === 'sectionName') {
+         updates.className = '';
+         updates.subjectName = '';
+         updates.chapterName = '';
+      }
+      if (name === 'className') {
+         updates.subjectName = '';
+         updates.chapterName = '';
+      }
+      if (name === 'subjectName') {
+         updates.chapterName = '';
+      }
+      
+      return { ...prev, ...updates };
+    });
   };
 
-  const handleSubmit = async (e) => {
+  const handleUpload = async (e) => {
     e.preventDefault();
-    if (!formData.video) {
+    if (!formData.videoFile) {
       setMessage({ type: 'error', text: 'Please select a video file.' });
       return;
     }
@@ -48,12 +64,13 @@ export default function UploadPage() {
     setMessage(null);
 
     const data = new FormData();
+    data.append('sectionName', formData.sectionName);
     data.append('className', formData.className);
     data.append('subjectName', formData.subjectName);
     data.append('chapterName', formData.chapterName);
     data.append('title', formData.title);
     data.append('is_free', formData.is_free);
-    data.append('video', formData.video);
+    data.append('video', formData.videoFile);
 
     try {
       await axios.post('/admin/upload', data, {
@@ -64,9 +81,8 @@ export default function UploadPage() {
         }
       });
       setMessage({ type: 'success', text: 'Video uploaded and compressed successfully!' });
-      setFormData({ ...formData, title: '', video: null });
-      document.getElementById('videoFile').value = '';
-      fetchCategories(); // Refresh categories
+      setFormData({ sectionName: 'AP School', className: '', subjectName: '', chapterName: '', title: '', is_free: false, videoFile: null });
+      fetchCategories(); // Refresh options
     } catch (error) {
       console.error('Upload error', error);
       setMessage({ type: 'error', text: 'Failed to upload video.' });
@@ -75,70 +91,67 @@ export default function UploadPage() {
     }
   };
 
+  // Cascading Logic
+  const getFilteredClasses = () => {
+    return categories.classes.filter(c => c.section === formData.sectionName);
+  };
+  const getFilteredSubjects = () => {
+    const classObj = getFilteredClasses().find(c => c.name === formData.className);
+    if (!classObj) return [];
+    return categories.subjects.filter(s => s.class_id === classObj.id);
+  };
+  const getFilteredChapters = () => {
+    const subjectObj = getFilteredSubjects().find(s => s.name === formData.subjectName);
+    if (!subjectObj) return [];
+    return categories.chapters.filter(ch => ch.subject_id === subjectObj.id);
+  };
+
   return (
-    <div style={{ maxWidth: '800px' }}>
-      <h1 className="page-title">Upload Video</h1>
-
-      {message && (
-        <div style={{ 
-          padding: '1rem', 
-          marginBottom: '1.5rem', 
-          borderRadius: '0.5rem',
-          backgroundColor: message.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-          color: message.type === 'success' ? '#34d399' : '#f87171'
-        }}>
-          {message.text}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="table-container" style={{ padding: '2rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+    <div className="upload-container">
+      <h1 className="page-title">Upload New Video</h1>
+      <div className="stat-card" style={{ maxWidth: '800px' }}>
+        {message && (
+          <div style={{ 
+            padding: '1rem', marginBottom: '1.5rem', borderRadius: '0.5rem',
+            backgroundColor: message.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+            color: message.type === 'success' ? '#34d399' : '#f87171'
+          }}>
+            {message.text}
+          </div>
+        )}
+        <form onSubmit={handleUpload} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
           
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label>Section</label>
+            <select name="sectionName" value={formData.sectionName} onChange={handleInputChange} required>
+              <option value="AP School">AP School</option>
+              <option value="Telangana School">Telangana School</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Lifeskills">Lifeskills</option>
+            </select>
+          </div>
+
           <div className="form-group">
             <label>Class / Section</label>
-            <input 
-              type="text" 
-              name="className" 
-              list="classes"
-              value={formData.className} 
-              onChange={handleInputChange} 
-              required 
-              placeholder="e.g. Class 10"
-            />
-            <datalist id="classes">
-              {categories.classes.map(c => <option key={c.id} value={c.name} />)}
+            <input type="text" name="className" list="classes-list" placeholder="Select or type new..." value={formData.className} onChange={handleInputChange} required />
+            <datalist id="classes-list">
+              {getFilteredClasses().map(c => <option key={c.id} value={c.name} />)}
             </datalist>
           </div>
 
           <div className="form-group">
             <label>Subject</label>
-            <input 
-              type="text" 
-              name="subjectName" 
-              list="subjects"
-              value={formData.subjectName} 
-              onChange={handleInputChange} 
-              required 
-              placeholder="e.g. Mathematics"
-            />
-            <datalist id="subjects">
-              {categories.subjects.map(s => <option key={s.id} value={s.name} />)}
+            <input type="text" name="subjectName" list="subjects-list" placeholder="Select or type new..." value={formData.subjectName} onChange={handleInputChange} required disabled={!formData.className} />
+            <datalist id="subjects-list">
+              {getFilteredSubjects().map(s => <option key={s.id} value={s.name} />)}
             </datalist>
           </div>
 
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>Chapter</label>
-            <input 
-              type="text" 
-              name="chapterName" 
-              list="chapters"
-              value={formData.chapterName} 
-              onChange={handleInputChange} 
-              required 
-              placeholder="e.g. Algebra Basics"
-            />
-            <datalist id="chapters">
-              {categories.chapters.map(c => <option key={c.id} value={c.name} />)}
+            <input type="text" name="chapterName" list="chapters-list" placeholder="Select or type new..." value={formData.chapterName} onChange={handleInputChange} required disabled={!formData.subjectName} />
+            <datalist id="chapters-list">
+              {getFilteredChapters().map(c => <option key={c.id} value={c.name} />)}
             </datalist>
           </div>
 
@@ -179,18 +192,17 @@ export default function UploadPage() {
             />
           </div>
 
-        </div>
-
-        <button type="submit" className="btn" disabled={uploading} style={{ width: '100%', marginTop: '1rem' }}>
+        <button type="submit" className="btn" disabled={uploading} style={{ width: '100%', marginTop: '1rem', gridColumn: '1 / -1' }}>
           {uploading ? 'Uploading & Compressing...' : 'Upload Video'}
         </button>
 
         {uploading && (
-          <div className="progress-bar">
+          <div className="progress-bar" style={{ gridColumn: '1 / -1' }}>
             <div className="progress-fill" style={{ width: `${progress}%` }}></div>
           </div>
         )}
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
