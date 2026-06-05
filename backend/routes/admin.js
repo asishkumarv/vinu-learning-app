@@ -139,9 +139,11 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     const chapterId = chapterRow.rows[0].id;
 
     // Insert Episode
+    const thumbnailUrl = uploadRes.secure_url.replace(/\.[^/.]+$/, ".jpg");
+    
     const newEpisode = await db.query(
-      'INSERT INTO episodes (chapter_id, title, video_url, duration, is_free) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [chapterId, title, uploadRes.secure_url, Math.floor(uploadRes.duration || 0), isFreeBool]
+      'INSERT INTO episodes (chapter_id, title, video_url, duration, is_free, thumbnail_url) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [chapterId, title, uploadRes.secure_url, Math.floor(uploadRes.duration || 0), isFreeBool, thumbnailUrl]
     );
 
     await db.query('COMMIT');
@@ -222,6 +224,7 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
     // Check if new video file is uploaded
     let newVideoUrl = null;
     let newDuration = null;
+    let newThumbnailUrl = null;
 
     if (req.file) {
       // 1. Get old video url to delete
@@ -247,6 +250,7 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
       });
       newVideoUrl = uploadRes.secure_url;
       newDuration = Math.floor(uploadRes.duration || 0);
+      newThumbnailUrl = uploadRes.secure_url.replace(/\.[^/.]+$/, ".jpg");
 
       // 4. Delete local temp files
       fs.unlinkSync(inputPath);
@@ -266,8 +270,8 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
     // Update DB
     if (newVideoUrl) {
       await db.query(
-        'UPDATE episodes SET title = $1, chapter_id = $2, is_free = $3, video_url = $4, duration = $5 WHERE id = $6',
-        [title, chapterId, isFreeBool, newVideoUrl, newDuration, id]
+        'UPDATE episodes SET title = $1, chapter_id = $2, is_free = $3, video_url = $4, duration = $5, thumbnail_url = $6 WHERE id = $7',
+        [title, chapterId, isFreeBool, newVideoUrl, newDuration, newThumbnailUrl, id]
       );
     } else {
       await db.query(
