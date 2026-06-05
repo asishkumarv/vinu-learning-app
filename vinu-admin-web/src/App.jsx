@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Upload, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Upload, LogOut, Video } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import UsersPage from './pages/Users';
 import UploadPage from './pages/Upload';
+import VideosPage from './pages/Videos';
 import axios from 'axios';
 
-axios.defaults.baseURL = 'http://localhost:5000/api';
+axios.defaults.baseURL = 'https://vinu-learning-app.onrender.com/api';
 
 function Sidebar({ onLogout }) {
   return (
@@ -19,6 +20,10 @@ function Sidebar({ onLogout }) {
       <NavLink to="/users" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
         <Users size={20} />
         <span>Users</span>
+      </NavLink>
+      <NavLink to="/videos" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
+        <Video size={20} />
+        <span>Videos</span>
       </NavLink>
       <NavLink to="/upload" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
         <Upload size={20} />
@@ -112,6 +117,7 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/videos" element={<VideosPage />} />
             <Route path="/upload" element={<UploadPage />} />
           </Routes>
         </div>

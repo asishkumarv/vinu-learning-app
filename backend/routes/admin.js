@@ -158,4 +158,165 @@ router.post('/upload', upload.single('video'), async (req, res) => {
   }
 });
 
+// GET all videos with class, subject, and chapter info
+router.get('/videos', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        e.id, e.title, e.video_url, e.duration, e.is_free, e.created_at,
+        c.name as chapter_name, c.id as chapter_id,
+        s.name as subject_name, s.id as subject_id,
+        cl.name as class_name, cl.id as class_id
+      FROM episodes e
+      JOIN chapters c ON e.chapter_id = c.id
+      JOIN subjects s ON c.subject_id = s.id
+      JOIN classes cl ON s.class_id = cl.id
+      ORDER BY e.created_at DESC
+    `;
+    const result = await db.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch videos error:', error);
+    res.status(500).json({ error: 'Failed to fetch videos' });
+  }
+});
+
+// Extract public_id from Cloudinary URL to delete it
+const extractPublicId = (url) => {
+  if (!url) return null;
+  const parts = url.split('/');
+  const filename = parts.pop();
+  const folder = parts.pop();
+  const publicId = `${folder}/${filename.split('.')[0]}`;
+  return publicId;
+};
+
+// PUT update video
+router.put('/videos/:id', upload.single('video'), async (req, res) => {
+  const { id } = req.params;
+  const { className, subjectName, chapterName, title, is_free } = req.body;
+  const isFreeBool = is_free === 'true' || is_free === true;
+
+  try {
+    await db.query('BEGIN');
+
+    // Handle Category mapping
+    let classRow = await db.query('SELECT id FROM classes WHERE name = $1', [className]);
+    if (classRow.rows.length === 0) {
+      classRow = await db.query('INSERT INTO classes (name) VALUES ($1) RETURNING id', [className]);
+    }
+    const classId = classRow.rows[0].id;
+
+    let subjectRow = await db.query('SELECT id FROM subjects WHERE name = $1 AND class_id = $2', [subjectName, classId]);
+    if (subjectRow.rows.length === 0) {
+      subjectRow = await db.query('INSERT INTO subjects (name, class_id) VALUES ($1, $2) RETURNING id', [subjectName, classId]);
+    }
+    const subjectId = subjectRow.rows[0].id;
+
+    let chapterRow = await db.query('SELECT id FROM chapters WHERE name = $1 AND subject_id = $2', [chapterName, subjectId]);
+    if (chapterRow.rows.length === 0) {
+      chapterRow = await db.query('INSERT INTO chapters (name, subject_id) VALUES ($1, $2) RETURNING id', [chapterName, subjectId]);
+    }
+    const chapterId = chapterRow.rows[0].id;
+
+    // Check if new video file is uploaded
+    let newVideoUrl = null;
+    let newDuration = null;
+
+    if (req.file) {
+      // 1. Get old video url to delete
+      const oldVideoRes = await db.query('SELECT video_url FROM episodes WHERE id = $1', [id]);
+      const oldVideoUrl = oldVideoRes.rows[0]?.video_url;
+
+      // 2. Compress new video
+      const inputPath = req.file.path;
+      const outputPath = path.join(uploadDir, 'compressed-' + req.file.filename);
+      await new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .videoCodec('libx264')
+          .outputOptions(['-crf 28', '-preset veryfast', '-movflags +faststart'])
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .save(outputPath);
+      });
+
+      // 3. Upload to Cloudinary
+      const uploadRes = await cloudinary.uploader.upload(outputPath, {
+        resource_type: 'video',
+        folder: 'vinu-learning-app'
+      });
+      newVideoUrl = uploadRes.secure_url;
+      newDuration = Math.floor(uploadRes.duration || 0);
+
+      // 4. Delete local temp files
+      fs.unlinkSync(inputPath);
+      fs.unlinkSync(outputPath);
+
+      // 5. Delete old video from Cloudinary
+      const oldPublicId = extractPublicId(oldVideoUrl);
+      if (oldPublicId) {
+        try {
+          await cloudinary.uploader.destroy(oldPublicId, { resource_type: 'video' });
+        } catch (e) {
+          console.error('Failed to delete old video from cloudinary:', e);
+        }
+      }
+    }
+
+    // Update DB
+    if (newVideoUrl) {
+      await db.query(
+        'UPDATE episodes SET title = $1, chapter_id = $2, is_free = $3, video_url = $4, duration = $5 WHERE id = $6',
+        [title, chapterId, isFreeBool, newVideoUrl, newDuration, id]
+      );
+    } else {
+      await db.query(
+        'UPDATE episodes SET title = $1, chapter_id = $2, is_free = $3 WHERE id = $4',
+        [title, chapterId, isFreeBool, id]
+      );
+    }
+
+    await db.query('COMMIT');
+    res.json({ message: 'Video updated successfully' });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    console.error('Update error:', error);
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: 'Failed to update video' });
+  }
+});
+
+// DELETE video
+router.delete('/videos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get URL to delete from Cloudinary
+    const episode = await db.query('SELECT video_url FROM episodes WHERE id = $1', [id]);
+    if (episode.rows.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoUrl = episode.rows[0].video_url;
+    const publicId = extractPublicId(videoUrl);
+
+    // Delete from DB
+    await db.query('DELETE FROM episodes WHERE id = $1', [id]);
+
+    // Delete from Cloudinary
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+      } catch (e) {
+        console.error('Failed to delete video from cloudinary:', e);
+      }
+    }
+
+    res.json({ message: 'Video deleted successfully' });
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
+
 module.exports = router;
