@@ -19,10 +19,12 @@ app.get('/', (req, res) => {
 const authRoutes = require('./routes/auth');
 const contentRoutes = require('./routes/content');
 const progressRoutes = require('./routes/progress');
+const adminRoutes = require('./routes/admin');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

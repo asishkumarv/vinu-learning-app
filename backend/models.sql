@@ -7,6 +7,15 @@ CREATE TABLE IF NOT EXISTS users (
     mobile VARCHAR(15) UNIQUE NOT NULL,
     name VARCHAR(100),
     password VARCHAR(255),
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: admins
+CREATE TABLE IF NOT EXISTS admins (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -42,6 +51,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     thumbnail_url TEXT,
     duration INT, -- in seconds
     is_recent BOOLEAN DEFAULT FALSE,
+    is_free BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

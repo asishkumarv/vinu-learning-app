@@ -71,7 +71,7 @@ export default function OtpScreen({ navigation, route }) {
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <Text style={[styles.heading, { color: colors.text }]}>OTP Verification</Text>
           <Text style={[styles.subText, { color: colors.textSecondary }]}>
-            Enter the 6 digit code sent to your mobile number. (Dummy: any 6 digits)
+            Enter the 6 digit code sent to your mobile number.
           </Text>
 
           <TextInput

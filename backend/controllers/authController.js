@@ -149,3 +149,36 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ error: 'Failed to update profile' });
   }
 };
+
+exports.adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const adminQuery = await db.query('SELECT * FROM admins WHERE email = $1', [email]);
+    if (adminQuery.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const admin = adminQuery.rows[0];
+    const isMatch = await bcrypt.compare(password, admin.password);
+
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { adminId: admin.id, email: admin.email, is_admin: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.status(200).json({ message: 'Admin login successful', token });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
