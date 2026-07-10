@@ -32,7 +32,11 @@ exports.getChaptersBySubject = async (req, res) => {
 const makeAbsolute = (url, req) => {
   if (!url) return url;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  const protocol = req.protocol;
+  
+  let protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  if (protocol.includes(',')) {
+    protocol = protocol.split(',')[0].trim();
+  }
   const host = req.get('host');
   const formattedUrl = url.startsWith('/') ? url : '/' + url;
   return `${protocol}://${host}${formattedUrl}`;
@@ -58,9 +62,14 @@ exports.getEpisodesByChapter = async (req, res) => {
 
 exports.getRecentReleases = async (req, res) => {
   try {
-    const result = await db.query(
+    let result = await db.query(
       'SELECT e.id, e.chapter_id, e.title, e.thumbnail_url, e.video_url, e.duration, e.is_free, e.is_recent, s.name as subject_name FROM episodes e JOIN chapters c ON e.chapter_id = c.id JOIN subjects s ON c.subject_id = s.id WHERE e.is_recent = TRUE ORDER BY e.created_at DESC LIMIT 10'
     );
+    if (result.rows.length === 0) {
+      result = await db.query(
+        'SELECT e.id, e.chapter_id, e.title, e.thumbnail_url, e.video_url, e.duration, e.is_free, e.is_recent, s.name as subject_name FROM episodes e JOIN chapters c ON e.chapter_id = c.id JOIN subjects s ON c.subject_id = s.id ORDER BY e.created_at DESC LIMIT 10'
+      );
+    }
     const mapped = result.rows.map(row => ({
       ...row,
       video_url: makeAbsolute(row.video_url, req),

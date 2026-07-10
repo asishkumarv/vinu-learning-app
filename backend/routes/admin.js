@@ -203,8 +203,8 @@ router.post('/upload', upload.single('video'), async (req, res) => {
 
     // Insert Episode
     const newEpisode = await db.query(
-      'INSERT INTO episodes (chapter_id, title, video_url, video_data, duration, is_free, thumbnail_url, content_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
-      [chapterId, title, videoUrl, videoData, duration, isFreeBool, thumbnailUrl, contentType]
+      'INSERT INTO episodes (chapter_id, title, video_url, video_data, duration, is_free, thumbnail_url, content_type, is_recent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
+      [chapterId, title, videoUrl, videoData, duration, isFreeBool, thumbnailUrl, contentType, true]
     );
 
     await db.query('COMMIT');
