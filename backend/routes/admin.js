@@ -102,7 +102,7 @@ const getDurationAndThumbnail = (videoPath, filename) => {
           timestamps: ['2'], // at 2 seconds
           folder: uploadDir,
           filename: thumbnailName,
-          size: '640x360'
+          size: '?x480'
         })
         .on('end', () => {
           resolve({ duration, thumbnailName });
@@ -115,7 +115,7 @@ const getDurationAndThumbnail = (videoPath, filename) => {
               timestamps: ['0'],
               folder: uploadDir,
               filename: thumbnailName,
-              size: '640x360'
+              size: '?x480'
             })
             .on('end', () => {
               resolve({ duration, thumbnailName });
