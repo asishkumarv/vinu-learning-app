@@ -240,8 +240,17 @@ router.get('/videos', async (req, res) => {
     const makeAbsolute = (url) => {
       if (!url) return url;
       if (url.startsWith('http://') || url.startsWith('https://')) return url;
-      const protocol = req.protocol;
       const host = req.get('host');
+      let protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      
+      // Force HTTPS in production domain to bypass Nginx proxy proto header absence
+      if (host && host.includes('vinuh.in')) {
+        protocol = 'https';
+      }
+
+      if (protocol.includes(',')) {
+        protocol = protocol.split(',')[0].trim();
+      }
       const formattedUrl = url.startsWith('/') ? url : '/' + url;
       return `${protocol}://${host}${formattedUrl}`;
     };
