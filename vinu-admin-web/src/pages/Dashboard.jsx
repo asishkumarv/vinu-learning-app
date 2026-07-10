@@ -30,11 +30,15 @@ export default function Dashboard() {
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-title">Total Users</div>
-          <div className="stat-value">{stats.usersCount}</div>
+          <div className="stat-value" style={{ background: 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            {stats.usersCount}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-title">Total Videos</div>
-          <div className="stat-value">{stats.videosCount}</div>
+          <div className="stat-value" style={{ background: 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            {stats.videosCount}
+          </div>
         </div>
       </div>
 

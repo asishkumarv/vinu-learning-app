@@ -4,7 +4,7 @@ import axios from 'axios';
 export default function UploadPage() {
   const [categories, setCategories] = useState({ classes: [], subjects: [], chapters: [] });
   const [formData, setFormData] = useState({
-    sectionName: 'AP School',
+    sectionName: 'AP school',
     className: '',
     subjectName: '',
     chapterName: '',
@@ -81,7 +81,7 @@ export default function UploadPage() {
         }
       });
       setMessage({ type: 'success', text: 'Video uploaded and compressed successfully!' });
-      setFormData({ sectionName: 'AP School', className: '', subjectName: '', chapterName: '', title: '', is_free: false, videoFile: null });
+      setFormData({ sectionName: 'AP school', className: '', subjectName: '', chapterName: '', title: '', is_free: false, videoFile: null });
       fetchCategories(); // Refresh options
     } catch (error) {
       console.error('Upload error', error);
@@ -119,21 +119,21 @@ export default function UploadPage() {
             {message.text}
           </div>
         )}
-        <form onSubmit={handleUpload} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+        <form onSubmit={handleUpload} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>Section</label>
             <select name="sectionName" value={formData.sectionName} onChange={handleInputChange} required>
-              <option value="AP School">AP School</option>
-              <option value="Telangana School">Telangana School</option>
+              <option value="AP school">AP School</option>
+              <option value="Telangana school">Telangana School</option>
               <option value="Intermediate">Intermediate</option>
-              <option value="Lifeskills">Lifeskills</option>
+              <option value="Life Skills">Life Skills</option>
             </select>
           </div>
 
           <div className="form-group">
             <label>Class / Section</label>
-            <input type="text" name="className" list="classes-list" placeholder="Select or type new..." value={formData.className} onChange={handleInputChange} required />
+            <input type="text" name="className" list="classes-list" placeholder="Select or type new..." value={formData.className} onChange={handleInputChange} autoComplete="off" required />
             <datalist id="classes-list">
               {getFilteredClasses().map(c => <option key={c.id} value={c.name} />)}
             </datalist>
@@ -141,7 +141,7 @@ export default function UploadPage() {
 
           <div className="form-group">
             <label>Subject</label>
-            <input type="text" name="subjectName" list="subjects-list" placeholder="Select or type new..." value={formData.subjectName} onChange={handleInputChange} required disabled={!formData.className} />
+            <input type="text" name="subjectName" list="subjects-list" placeholder="Select or type new..." value={formData.subjectName} onChange={handleInputChange} autoComplete="off" required disabled={!formData.className} />
             <datalist id="subjects-list">
               {getFilteredSubjects().map(s => <option key={s.id} value={s.name} />)}
             </datalist>
@@ -149,7 +149,7 @@ export default function UploadPage() {
 
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>Chapter</label>
-            <input type="text" name="chapterName" list="chapters-list" placeholder="Select or type new..." value={formData.chapterName} onChange={handleInputChange} required disabled={!formData.subjectName} />
+            <input type="text" name="chapterName" list="chapters-list" placeholder="Select or type new..." value={formData.chapterName} onChange={handleInputChange} autoComplete="off" required disabled={!formData.subjectName} />
             <datalist id="chapters-list">
               {getFilteredChapters().map(c => <option key={c.id} value={c.name} />)}
             </datalist>
@@ -184,7 +184,7 @@ export default function UploadPage() {
             <input 
               type="file" 
               id="videoFile"
-              name="video" 
+              name="videoFile" 
               accept="video/*" 
               onChange={handleInputChange} 
               required 

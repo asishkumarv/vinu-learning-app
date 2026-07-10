@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Upload, LogOut, Video } from 'lucide-react';
+import { LayoutDashboard, Users, Upload, LogOut, Video, Eye, EyeOff } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import UsersPage from './pages/Users';
 import UploadPage from './pages/Upload';
@@ -9,10 +9,15 @@ import axios from 'axios';
 
 axios.defaults.baseURL = 'https://vinu-learning-app.onrender.com/api';
 
+const savedToken = localStorage.getItem('adminToken');
+if (savedToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+}
+
 function Sidebar({ onLogout }) {
   return (
     <div className="sidebar">
-      <div className="sidebar-title">Vinu Admin</div>
+      <div className="sidebar-title">Vinuh Admin</div>
       <NavLink to="/dashboard" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
         <LayoutDashboard size={20} />
         <span>Dashboard</span>
@@ -31,7 +36,7 @@ function Sidebar({ onLogout }) {
       </NavLink>
       
       <div style={{ marginTop: 'auto' }}>
-        <button onClick={onLogout} className="nav-link" style={{ background: 'transparent', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}>
+        <button onClick={onLogout} className="nav-link" style={{ background: 'transparent', width: '100%', textAlign: 'left', cursor: 'pointer', color: 'var(--danger-color)' }}>
           <LogOut size={20} />
           <span>Logout</span>
         </button>
@@ -43,6 +48,7 @@ function Sidebar({ onLogout }) {
 function Login({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -64,26 +70,68 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <div className="stat-card" style={{ width: '400px' }}>
-        <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Admin Login</h2>
-        {error && <div style={{ color: 'var(--danger-color)', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
-        
-        <form onSubmit={handleLogin}>
-          <div className="form-group">
-            <label>Email Address</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin@vinu.com" />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="********" />
-          </div>
-          <button type="submit" className="btn" disabled={loading} style={{ width: '100%', marginTop: '0.5rem' }}>
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
+    <>
+      <div className="login-bg">
+        <div className="orb orb-1"></div>
+        <div className="orb orb-2"></div>
       </div>
-    </div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+        <div className="stat-card" style={{ width: '420px', padding: '2.5rem 2rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <h2 className="page-title" style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Welcome Back</h2>
+            <p style={{ color: 'var(--text-secondary)' }}>Sign in to Vinuh Admin Panel</p>
+          </div>
+          
+          {error && (
+            <div style={{ 
+              color: 'var(--danger-color)', 
+              backgroundColor: 'var(--danger-light)',
+              padding: '0.75rem',
+              borderRadius: '0.5rem',
+              marginBottom: '1.5rem', 
+              textAlign: 'center',
+              fontSize: '0.875rem'
+            }}>
+              {error}
+            </div>
+          )}
+          
+          <form onSubmit={handleLogin}>
+            <div className="form-group">
+              <label>Email Address</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin@vinuh.com" />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password} 
+                  onChange={e => setPassword(e.target.value)} 
+                  required 
+                  placeholder="••••••••" 
+                  style={{ paddingRight: '2.5rem' }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ 
+                    position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', 
+                    background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            <button type="submit" className="btn" disabled={loading} style={{ width: '100%', marginTop: '1rem' }}>
+              <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </>
   );
 }
 

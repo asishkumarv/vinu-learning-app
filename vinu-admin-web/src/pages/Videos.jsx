@@ -9,7 +9,7 @@ export default function VideosPage() {
   
   const [editingVideo, setEditingVideo] = useState(null);
   const [formData, setFormData] = useState({
-    sectionName: 'AP School',
+    sectionName: 'AP school',
     className: '',
     subjectName: '',
     chapterName: '',
@@ -61,7 +61,7 @@ export default function VideosPage() {
   const handleEditClick = (video) => {
     setEditingVideo(video);
     setFormData({
-      sectionName: video.section_name || 'AP School',
+      sectionName: video.section_name || 'AP school',
       className: video.class_name || '',
       subjectName: video.subject_name || '',
       chapterName: video.chapter_name || '',
@@ -224,7 +224,7 @@ export default function VideosPage() {
       {editingVideo && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(10, 15, 28, 0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 1000
         }}>
           <div className="stat-card" style={{ width: '600px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
@@ -256,28 +256,28 @@ export default function VideosPage() {
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Section</label>
                 <select name="sectionName" value={formData.sectionName} onChange={handleInputChange} required>
-                  <option value="AP School">AP School</option>
-                  <option value="Telangana School">Telangana School</option>
+                  <option value="AP school">AP School</option>
+                  <option value="Telangana school">Telangana School</option>
                   <option value="Intermediate">Intermediate</option>
-                  <option value="Lifeskills">Lifeskills</option>
+                  <option value="Life Skills">Life Skills</option>
                 </select>
               </div>
 
               <div className="form-group">
                 <label>Class / Section</label>
-                <input type="text" name="className" list="classes-edit" value={formData.className} onChange={handleInputChange} required placeholder="Select or type new..." />
+                <input type="text" name="className" list="classes-edit" value={formData.className} onChange={handleInputChange} autoComplete="off" required placeholder="Select or type new..." />
                 <datalist id="classes-edit">{getFilteredClasses().map(c => <option key={c.id} value={c.name} />)}</datalist>
               </div>
 
               <div className="form-group">
                 <label>Subject</label>
-                <input type="text" name="subjectName" list="subjects-edit" value={formData.subjectName} onChange={handleInputChange} required disabled={!formData.className} placeholder="Select or type new..." />
+                <input type="text" name="subjectName" list="subjects-edit" value={formData.subjectName} onChange={handleInputChange} autoComplete="off" required disabled={!formData.className} placeholder="Select or type new..." />
                 <datalist id="subjects-edit">{getFilteredSubjects().map(s => <option key={s.id} value={s.name} />)}</datalist>
               </div>
 
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Chapter</label>
-                <input type="text" name="chapterName" list="chapters-edit" value={formData.chapterName} onChange={handleInputChange} required disabled={!formData.subjectName} placeholder="Select or type new..." />
+                <input type="text" name="chapterName" list="chapters-edit" value={formData.chapterName} onChange={handleInputChange} autoComplete="off" required disabled={!formData.subjectName} placeholder="Select or type new..." />
                 <datalist id="chapters-edit">{getFilteredChapters().map(c => <option key={c.id} value={c.name} />)}</datalist>
               </div>
 
