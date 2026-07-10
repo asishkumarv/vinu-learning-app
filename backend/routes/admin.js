@@ -170,6 +170,13 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     duration = metadata.duration;
     thumbnailUrl = `/uploads/${metadata.thumbnailName}`;
 
+    // Make thumbnail readable by Nginx
+    try {
+      fs.chmodSync(path.join(uploadDir, metadata.thumbnailName), 0o644);
+    } catch (e) {
+      console.error('Failed to set permissions on thumbnail:', e.message);
+    }
+
     if (storageMode === 'database') {
       console.log('Reading video into database buffer...');
       videoData = fs.readFileSync(outputPath);
@@ -178,6 +185,12 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     } else {
       // Local storage
       videoUrl = `/uploads/compressed-${req.file.filename}`;
+      // Make video readable by Nginx
+      try {
+        fs.chmodSync(outputPath, 0o644);
+      } catch (e) {
+        console.error('Failed to set permissions on video:', e.message);
+      }
     }
 
     // Get DB objects, create if not exist
@@ -339,11 +352,24 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
       newDuration = metadata.duration;
       newThumbnailUrl = `/uploads/${metadata.thumbnailName}`;
 
+      // Make thumbnail readable by Nginx
+      try {
+        fs.chmodSync(path.join(uploadDir, metadata.thumbnailName), 0o644);
+      } catch (e) {
+        console.error('Failed to set permissions on thumbnail:', e.message);
+      }
+
       if (storageMode === 'database') {
         newVideoData = fs.readFileSync(outputPath);
         fs.unlinkSync(outputPath);
       } else {
         newVideoUrl = `/uploads/compressed-${req.file.filename}`;
+        // Make video readable by Nginx
+        try {
+          fs.chmodSync(outputPath, 0o644);
+        } catch (e) {
+          console.error('Failed to set permissions on video:', e.message);
+        }
       }
 
       // Cleanup old files if they are local filesystem files
