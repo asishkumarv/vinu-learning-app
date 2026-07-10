@@ -25,10 +25,18 @@ const sendOTP = async (mobile, otp) => {
   }
   
   try {
+    // Sanitize mobile number: remove any non-digit characters
+    let cleanMobile = mobile.replace(/\D/g, '');
+    
+    // If it has 10 digits, prepend 91 (India country code)
+    if (cleanMobile.length === 10) {
+      cleanMobile = '91' + cleanMobile;
+    }
+
     const message = await client.messages.create({
       body: `Your Vinu Learning App verification code is: ${otp}`,
       from: fromWhatsApp,
-      to: `whatsapp:+91${mobile}`,
+      to: `whatsapp:+${cleanMobile}`,
     });
     console.log(`[OTP] WhatsApp message sent successfully via Twilio. SID: ${message.sid}`);
     return message;

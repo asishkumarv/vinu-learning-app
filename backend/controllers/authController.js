@@ -49,9 +49,6 @@ exports.verifyOtp = async (req, res) => {
   try {
     const { mobile, otp } = req.body;
     
-    // MOCK OTP FOR TESTING
-    // Accept any dummy digits, bypassing actual OTP checks.
-    /*
     const stored = otps.get(mobile);
     if (!stored || stored.otp !== otp || stored.expires < Date.now()) {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
@@ -60,7 +57,6 @@ exports.verifyOtp = async (req, res) => {
     if (stored.type !== 'auth') {
       return res.status(400).json({ error: 'Invalid OTP type' });
     }
-    */
 
     // Check if existing user
     const existingUser = await db.query(
@@ -106,17 +102,13 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Mobile number is required' });
     }
 
-    // MOCK OTP FOR TESTING
-    // Bypass OTP generation and sending
-    /*
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     otps.set(mobile, { otp, type: 'auth', expires: Date.now() + 600000 }); // 10 mins
 
     // Send OTP via WhatsApp
     await sendOTP(mobile, otp);
-    */
 
-    res.status(200).json({ message: 'OTP sent (mocked for testing)' });
+    res.status(200).json({ message: 'OTP sent' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to send OTP' });
