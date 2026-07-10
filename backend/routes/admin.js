@@ -8,21 +8,29 @@ const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const ffprobe = require('@ffprobe-installer/ffprobe');
 const cloudinary = require('cloudinary').v2;
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+ffmpeg.setFfprobePath(ffprobe.path);
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME?.trim(),
-  api_key: process.env.CLOUDINARY_API_KEY?.trim(),
-  api_secret: process.env.CLOUDINARY_API_SECRET?.trim()
-});
+const storageMode = process.env.VIDEO_STORAGE_MODE || 'local';
+
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME.trim(),
+    api_key: process.env.CLOUDINARY_API_KEY?.trim(),
+    api_secret: process.env.CLOUDINARY_API_SECRET?.trim()
+  });
+}
+
 
 // Ensure uploads dir exists
 const uploadDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
+
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
@@ -77,6 +85,49 @@ router.get('/categories', async (req, res) => {
   }
 });
 
+const getDurationAndThumbnail = (videoPath, filename) => {
+  return new Promise((resolve, reject) => {
+    // 1. Get video duration
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err) {
+        return reject(new Error('Failed to parse video metadata: ' + err.message));
+      }
+      const duration = Math.floor(metadata.format.duration || 0);
+      
+      // 2. Generate thumbnail
+      const thumbnailName = 'thumbnail-' + filename.split('.')[0] + '.jpg';
+      ffmpeg(videoPath)
+        .screenshots({
+          count: 1,
+          timestamps: ['2'], // at 2 seconds
+          folder: uploadDir,
+          filename: thumbnailName,
+          size: '640x360'
+        })
+        .on('end', () => {
+          resolve({ duration, thumbnailName });
+        })
+        .on('error', (thumbnailErr) => {
+          // If screenshot fails (e.g. video shorter than 2s), try at 0s
+          ffmpeg(videoPath)
+            .screenshots({
+              count: 1,
+              timestamps: ['0'],
+              folder: uploadDir,
+              filename: thumbnailName,
+              size: '640x360'
+            })
+            .on('end', () => {
+              resolve({ duration, thumbnailName });
+            })
+            .on('error', (err2) => {
+              reject(new Error('Failed to generate thumbnail: ' + err2.message));
+            });
+        });
+    });
+  });
+};
+
 router.post('/upload', upload.single('video'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No video file provided' });
@@ -105,17 +156,29 @@ router.post('/upload', upload.single('video'), async (req, res) => {
         .save(outputPath);
     });
 
-    console.log('Uploading to Cloudinary:', outputPath);
-    
-    // Upload to Cloudinary
-    const uploadRes = await cloudinary.uploader.upload(outputPath, {
-      resource_type: 'video',
-      folder: 'vinu-learning-app'
-    });
-
-    // Cleanup temp files
+    // Cleanup raw input file
     fs.unlinkSync(inputPath);
-    fs.unlinkSync(outputPath);
+
+    let videoUrl = null;
+    let videoData = null;
+    let duration = 0;
+    let thumbnailUrl = null;
+    let contentType = req.file.mimetype || 'video/mp4';
+
+    console.log('Generating thumbnail and duration...');
+    const metadata = await getDurationAndThumbnail(outputPath, req.file.filename);
+    duration = metadata.duration;
+    thumbnailUrl = `/uploads/${metadata.thumbnailName}`;
+
+    if (storageMode === 'database') {
+      console.log('Reading video into database buffer...');
+      videoData = fs.readFileSync(outputPath);
+      // Clean up compressed video from disk
+      fs.unlinkSync(outputPath);
+    } else {
+      // Local storage
+      videoUrl = `/uploads/compressed-${req.file.filename}`;
+    }
 
     // Get DB objects, create if not exist
     await db.query('BEGIN');
@@ -139,11 +202,9 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     const chapterId = chapterRow.rows[0].id;
 
     // Insert Episode
-    const thumbnailUrl = uploadRes.secure_url.replace(/\.[^/.]+$/, ".jpg");
-    
     const newEpisode = await db.query(
-      'INSERT INTO episodes (chapter_id, title, video_url, duration, is_free, thumbnail_url) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [chapterId, title, uploadRes.secure_url, Math.floor(uploadRes.duration || 0), isFreeBool, thumbnailUrl]
+      'INSERT INTO episodes (chapter_id, title, video_url, video_data, duration, is_free, thumbnail_url, content_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+      [chapterId, title, videoUrl, videoData, duration, isFreeBool, thumbnailUrl, contentType]
     );
 
     await db.query('COMMIT');
@@ -176,12 +237,26 @@ router.get('/videos', async (req, res) => {
       ORDER BY e.created_at DESC
     `;
     const result = await db.query(query);
-    res.json(result.rows);
+    const makeAbsolute = (url) => {
+      if (!url) return url;
+      if (url.startsWith('http://') || url.startsWith('https://')) return url;
+      const protocol = req.protocol;
+      const host = req.get('host');
+      const formattedUrl = url.startsWith('/') ? url : '/' + url;
+      return `${protocol}://${host}${formattedUrl}`;
+    };
+
+    const mapped = result.rows.map(row => ({
+      ...row,
+      video_url: makeAbsolute(row.video_url)
+    }));
+    res.json(mapped);
   } catch (error) {
     console.error('Fetch videos error:', error);
     res.status(500).json({ error: 'Failed to fetch videos' });
   }
 });
+
 
 // Extract public_id from Cloudinary URL to delete it
 const extractPublicId = (url) => {
@@ -199,7 +274,7 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
   const { sectionName, className, subjectName, chapterName, title, is_free } = req.body;
   const isFreeBool = is_free === 'true' || is_free === true;
 
-    try {
+  try {
     await db.query('BEGIN');
 
     // Handle Category mapping
@@ -223,13 +298,16 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
 
     // Check if new video file is uploaded
     let newVideoUrl = null;
+    let newVideoData = null;
     let newDuration = null;
     let newThumbnailUrl = null;
+    let contentType = null;
 
     if (req.file) {
-      // 1. Get old video url to delete
-      const oldVideoRes = await db.query('SELECT video_url FROM episodes WHERE id = $1', [id]);
+      // 1. Get old video url and thumbnail to delete
+      const oldVideoRes = await db.query('SELECT video_url, thumbnail_url FROM episodes WHERE id = $1', [id]);
       const oldVideoUrl = oldVideoRes.rows[0]?.video_url;
+      const oldThumbnailUrl = oldVideoRes.rows[0]?.thumbnail_url;
 
       // 2. Compress new video
       const inputPath = req.file.path;
@@ -243,20 +321,37 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
           .save(outputPath);
       });
 
-      // 3. Upload to Cloudinary
-      const uploadRes = await cloudinary.uploader.upload(outputPath, {
-        resource_type: 'video',
-        folder: 'vinu-learning-app'
-      });
-      newVideoUrl = uploadRes.secure_url;
-      newDuration = Math.floor(uploadRes.duration || 0);
-      newThumbnailUrl = uploadRes.secure_url.replace(/\.[^/.]+$/, ".jpg");
-
-      // 4. Delete local temp files
+      // Cleanup raw file
       fs.unlinkSync(inputPath);
-      fs.unlinkSync(outputPath);
+      contentType = req.file.mimetype || 'video/mp4';
 
-      // 5. Delete old video from Cloudinary
+      console.log('Generating new thumbnail and duration...');
+      const metadata = await getDurationAndThumbnail(outputPath, req.file.filename);
+      newDuration = metadata.duration;
+      newThumbnailUrl = `/uploads/${metadata.thumbnailName}`;
+
+      if (storageMode === 'database') {
+        newVideoData = fs.readFileSync(outputPath);
+        fs.unlinkSync(outputPath);
+      } else {
+        newVideoUrl = `/uploads/compressed-${req.file.filename}`;
+      }
+
+      // Cleanup old files if they are local filesystem files
+      if (oldVideoUrl && oldVideoUrl.startsWith('/uploads')) {
+        const oldVideoPath = path.join(__dirname, '..', oldVideoUrl);
+        if (fs.existsSync(oldVideoPath)) {
+          try { fs.unlinkSync(oldVideoPath); } catch (e) { console.error('Failed to delete old video file:', e); }
+        }
+      }
+      if (oldThumbnailUrl && oldThumbnailUrl.startsWith('/uploads')) {
+        const oldThumbPath = path.join(__dirname, '..', oldThumbnailUrl);
+        if (fs.existsSync(oldThumbPath)) {
+          try { fs.unlinkSync(oldThumbPath); } catch (e) { console.error('Failed to delete old thumbnail file:', e); }
+        }
+      }
+
+      // Delete old video from Cloudinary if it was a Cloudinary URL
       const oldPublicId = extractPublicId(oldVideoUrl);
       if (oldPublicId) {
         try {
@@ -268,10 +363,12 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
     }
 
     // Update DB
-    if (newVideoUrl) {
+    if (req.file) {
       await db.query(
-        'UPDATE episodes SET title = $1, chapter_id = $2, is_free = $3, video_url = $4, duration = $5, thumbnail_url = $6 WHERE id = $7',
-        [title, chapterId, isFreeBool, newVideoUrl, newDuration, newThumbnailUrl, id]
+        `UPDATE episodes 
+         SET title = $1, chapter_id = $2, is_free = $3, video_url = $4, video_data = $5, duration = $6, thumbnail_url = $7, content_type = $8 
+         WHERE id = $9`,
+        [title, chapterId, isFreeBool, newVideoUrl, newVideoData, newDuration, newThumbnailUrl, contentType, id]
       );
     } else {
       await db.query(
@@ -295,19 +392,33 @@ router.delete('/videos/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Get URL to delete from Cloudinary
-    const episode = await db.query('SELECT video_url FROM episodes WHERE id = $1', [id]);
+    // Get URL and thumbnail
+    const episode = await db.query('SELECT video_url, thumbnail_url FROM episodes WHERE id = $1', [id]);
     if (episode.rows.length === 0) {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    const videoUrl = episode.rows[0].video_url;
-    const publicId = extractPublicId(videoUrl);
+    const { video_url, thumbnail_url } = episode.rows[0];
+    const publicId = extractPublicId(video_url);
 
     // Delete from DB
     await db.query('DELETE FROM episodes WHERE id = $1', [id]);
 
-    // Delete from Cloudinary
+    // Delete local files if exist
+    if (video_url && video_url.startsWith('/uploads')) {
+      const videoPath = path.join(__dirname, '..', video_url);
+      if (fs.existsSync(videoPath)) {
+        try { fs.unlinkSync(videoPath); } catch (e) { console.error('Failed to delete video file:', e); }
+      }
+    }
+    if (thumbnail_url && thumbnail_url.startsWith('/uploads')) {
+      const thumbPath = path.join(__dirname, '..', thumbnail_url);
+      if (fs.existsSync(thumbPath)) {
+        try { fs.unlinkSync(thumbPath); } catch (e) { console.error('Failed to delete thumbnail file:', e); }
+      }
+    }
+
+    // Delete from Cloudinary if it was a Cloudinary URL
     if (publicId) {
       try {
         await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });

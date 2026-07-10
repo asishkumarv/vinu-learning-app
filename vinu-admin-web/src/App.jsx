@@ -7,7 +7,7 @@ import UploadPage from './pages/Upload';
 import VideosPage from './pages/Videos';
 import axios from 'axios';
 
-axios.defaults.baseURL = 'https://vinu-learning-app.onrender.com/api';
+axios.defaults.baseURL = 'https://api.vinuh.in/api';
 
 const savedToken = localStorage.getItem('adminToken');
 if (savedToken) {
