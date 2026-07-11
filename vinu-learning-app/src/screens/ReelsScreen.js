@@ -30,6 +30,7 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
   
   const isLocked = item.is_free === false && !isUnlocked;
   const [status, setStatus] = useState({});
+  const [videoRatio, setVideoRatio] = useState(16 / 9);
   const [isMuted, setIsMuted] = useState(false);
   const [showSeekFeedback, setShowSeekFeedback] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -134,17 +135,28 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
   return (
     <View style={[styles.videoContainer, { height: videoHeight, width: videoWidth }]}>
       <Pressable onPress={handleVideoTap} style={styles.videoWrapper}>
-        <Video
+         <Video
           key={item.video_url || item.id}
           ref={videoRef}
           source={{ uri: item.video_url ? item.video_url : contentApi.getVideoUrl(item.id) }}
-          style={[styles.video, isLocked && { opacity: 0.3 }]}
+          style={[
+            videoRatio >= 1 
+              ? { width: '100%', height: undefined, aspectRatio: videoRatio }
+              : { height: '100%', width: undefined, aspectRatio: videoRatio },
+            isLocked && { opacity: 0.3 }
+          ]}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={isActive && isFocused && !isLocked}
           isLooping={false}
           useNativeControls={false}
           isMuted={isMuted}
           onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          onReadyForDisplay={(event) => {
+            if (event.naturalSize && event.naturalSize.width && event.naturalSize.height) {
+              const { width, height } = event.naturalSize;
+              setVideoRatio(width / height);
+            }
+          }}
           onLoadStart={() => !isLocked && setIsLoading(true)}
           onLoad={() => setIsLoading(false)}
           onError={() => setIsLoading(false)}

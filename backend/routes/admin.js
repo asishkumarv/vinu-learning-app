@@ -128,6 +128,50 @@ const getDurationAndThumbnail = (videoPath, filename) => {
   });
 };
 
+const processVideoFile = (inputPath, outputPath, fileSize) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(inputPath, (err, metadata) => {
+      if (err) {
+        return reject(new Error('Failed to probe video: ' + err.message));
+      }
+
+      const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+      const sar = videoStream ? videoStream.sample_aspect_ratio : null;
+      const isAnamorphic = sar && sar !== '1:1' && sar !== '0:1';
+
+      const fileSizeMB = fileSize / (1024 * 1024);
+      const needsCompression = fileSizeMB >= 30;
+
+      if (needsCompression || isAnamorphic) {
+        console.log(`Processing video: size=${fileSizeMB.toFixed(2)}MB, isAnamorphic=${isAnamorphic}. Running ffmpeg...`);
+        const proc = ffmpeg(inputPath)
+          .videoCodec('libx264')
+          .outputOptions(['-crf 28', '-preset veryfast', '-movflags +faststart']);
+
+        if (isAnamorphic) {
+          console.log(`Forcing square pixels with scale='trunc(iw*sar/2)*2':ih filter for anamorphic video (SAR: ${sar})`);
+          proc.outputOptions('-vf', "scale='trunc(iw*sar/2)*2':ih,setsar=1");
+        }
+
+        proc.on('end', () => {
+          try { fs.unlinkSync(inputPath); } catch (e) {}
+          resolve();
+        })
+        .on('error', (ffmpegErr) => reject(ffmpegErr))
+        .save(outputPath);
+      } else {
+        console.log(`Skipping compression: size=${fileSizeMB.toFixed(2)}MB. Moving file.`);
+        try {
+          fs.renameSync(inputPath, outputPath);
+          resolve();
+        } catch (renameErr) {
+          reject(renameErr);
+        }
+      }
+    });
+  });
+};
+
 router.post('/upload', upload.single('video'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No video file provided' });
@@ -139,29 +183,8 @@ router.post('/upload', upload.single('video'), async (req, res) => {
   try {
     const inputPath = req.file.path;
     const outputPath = path.join(uploadDir, 'compressed-' + req.file.filename);
-    const fileSizeMB = req.file.size / (1024 * 1024);
 
-    if (fileSizeMB < 30) {
-      console.log(`Video size (${fileSizeMB.toFixed(2)} MB) is below 30MB. Skipping compression.`);
-      fs.renameSync(inputPath, outputPath);
-    } else {
-      console.log(`Video size (${fileSizeMB.toFixed(2)} MB) is 30MB or above. Compressing video:`, inputPath);
-      // Compress using ffmpeg
-      await new Promise((resolve, reject) => {
-        ffmpeg(inputPath)
-          .videoCodec('libx264')
-          .outputOptions([
-            '-crf 28',
-            '-preset veryfast',
-            '-movflags +faststart'
-          ])
-          .on('end', () => resolve())
-          .on('error', (err) => reject(err))
-          .save(outputPath);
-      });
-      // Cleanup raw input file
-      fs.unlinkSync(inputPath);
-    }
+    await processVideoFile(inputPath, outputPath, req.file.size);
 
     let videoUrl = null;
     let videoData = null;
@@ -335,27 +358,10 @@ router.put('/videos/:id', upload.single('video'), async (req, res) => {
       const oldVideoUrl = oldVideoRes.rows[0]?.video_url;
       const oldThumbnailUrl = oldVideoRes.rows[0]?.thumbnail_url;
 
-      // 2. Compress new video if >= 30MB, else skip compression
+      // 2. Process new video
       const inputPath = req.file.path;
       const outputPath = path.join(uploadDir, 'compressed-' + req.file.filename);
-      const fileSizeMB = req.file.size / (1024 * 1024);
-
-      if (fileSizeMB < 30) {
-        console.log(`Updated video size (${fileSizeMB.toFixed(2)} MB) is below 30MB. Skipping compression.`);
-        fs.renameSync(inputPath, outputPath);
-      } else {
-        console.log(`Updated video size (${fileSizeMB.toFixed(2)} MB) is 30MB or above. Compressing video:`, inputPath);
-        await new Promise((resolve, reject) => {
-          ffmpeg(inputPath)
-            .videoCodec('libx264')
-            .outputOptions(['-crf 28', '-preset veryfast', '-movflags +faststart'])
-            .on('end', () => resolve())
-            .on('error', (err) => reject(err))
-            .save(outputPath);
-        });
-        // Cleanup raw file
-        fs.unlinkSync(inputPath);
-      }
+      await processVideoFile(inputPath, outputPath, req.file.size);
       contentType = req.file.mimetype || 'video/mp4';
 
       console.log('Generating new thumbnail and duration...');
