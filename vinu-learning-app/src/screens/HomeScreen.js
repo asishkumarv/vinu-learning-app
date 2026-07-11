@@ -30,6 +30,8 @@ export default function HomeScreen({ navigation }) {
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [videos, setVideos] = useState([]);
+  const [chapters, setChapters] = useState([]);
+  const [selectedChapter, setSelectedChapter] = useState(null);
   const [releases, setReleases] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unlockedVideos, setUnlockedVideos] = useState({});
@@ -78,6 +80,8 @@ export default function HomeScreen({ navigation }) {
       setExpandedClass(null);
       setSubjects([]);
       setSelectedSubject(null);
+      setChapters([]);
+      setSelectedChapter(null);
       setVideos([]);
     } else {
       setExpandedClass(clsId);
@@ -95,18 +99,27 @@ export default function HomeScreen({ navigation }) {
 
   const handleSubjectPress = async (subId) => {
     setSelectedSubject(subId);
+    setChapters([]);
+    setSelectedChapter(null);
+    setVideos([]);
     setLoading(true);
     try {
-      // For now, chapters and episodes might be simplified or we fetch episodes for the first chapter
-      // Here we'll fetch episodes for a subject (maybe we need an API to get all episodes for a subject)
-      // I'll assume we need to get chapters first, then episodes for the first chapter for display
       const chaptersRes = await contentApi.getChapters(subId);
-      if (chaptersRes.data.length > 0) {
-        const episodesRes = await contentApi.getEpisodes(chaptersRes.data[0].id);
-        setVideos(episodesRes.data);
-      } else {
-        setVideos([]);
-      }
+      setChapters(chaptersRes.data);
+    } catch (error) {
+      console.error('Error fetching chapters:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChapterPress = async (chapterId) => {
+    setSelectedChapter(chapterId);
+    setVideos([]);
+    setLoading(true);
+    try {
+      const episodesRes = await contentApi.getEpisodes(chapterId);
+      setVideos(episodesRes.data);
     } catch (error) {
       console.error('Error fetching videos:', error);
     } finally {
@@ -114,7 +127,7 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const goToVideos = (video) => {
+  const goToVideos = (video, playlistType = 'chapter') => {
     const isUnlocked = unlockedVideos[video.id];
     const isLocked = video.is_free === false && !isUnlocked;
 
@@ -123,7 +136,12 @@ export default function HomeScreen({ navigation }) {
       setModalVisible(true);
       return;
     }
-    navigation.navigate('Videos', { videoId: video.id });
+
+    if (playlistType === 'recent') {
+      navigation.navigate('Videos', { videoId: video.id, playlistType: 'recent' });
+    } else {
+      navigation.navigate('Videos', { videoId: video.id, chapterId: video.chapter_id });
+    }
   };
 
   const handleUnlockSuccess = async () => {
@@ -132,7 +150,7 @@ export default function HomeScreen({ navigation }) {
     setUnlockedVideos(newUnlocked);
     await AsyncStorage.setItem('unlockedVideos', JSON.stringify(newUnlocked));
     setModalVisible(false);
-    navigation.navigate('Videos', { videoId: selectedVideoToUnlock.id });
+    navigation.navigate('Videos', { videoId: selectedVideoToUnlock.id, chapterId: selectedVideoToUnlock.chapter_id });
   };
 
   const renderStateTab = (name, color) => (
@@ -239,6 +257,36 @@ export default function HomeScreen({ navigation }) {
                     </View>
 
                     {selectedSubject && (
+                      <View style={[styles.videoList, { borderTopWidth: 0, paddingTop: 0 }]}>
+                        <Text style={[styles.videoListTitle, { color: colors.text, marginBottom: 10 }]}>
+                          Chapters
+                        </Text>
+                        <View style={styles.subjectsGrid}>
+                          {chapters.length === 0 && !loading && (
+                            <Text style={{ color: colors.textSecondary, paddingVertical: 10 }}>Chapters coming soon...</Text>
+                          )}
+                          {chapters.map((ch) => (
+                            <TouchableOpacity
+                              key={ch.id}
+                              style={[
+                                styles.subjectChip,
+                                { backgroundColor: selectedChapter === ch.id ? colors.primary : colors.chip }
+                              ]}
+                              onPress={() => handleChapterPress(ch.id)}
+                            >
+                              <Text style={[
+                                styles.subjectText,
+                                { color: selectedChapter === ch.id ? '#FFFFFF' : colors.chipText }
+                              ]}>
+                                {ch.title}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedChapter && (
                       <View style={styles.videoList}>
                         <Text style={[styles.videoListTitle, { color: colors.text }]}>
                            Lessons
@@ -302,7 +350,7 @@ export default function HomeScreen({ navigation }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalScroll}
             renderItem={({ item }) => (
-              <TouchableOpacity style={[styles.chapterCard, { backgroundColor: colors.surface }]} onPress={() => goToVideos(item)}>
+              <TouchableOpacity style={[styles.chapterCard, { backgroundColor: colors.surface }]} onPress={() => goToVideos(item, 'recent')}>
                 <Image 
                   source={{ uri: item.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg' }} 
                   style={styles.chapterImage} 

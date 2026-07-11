@@ -276,7 +276,7 @@ export default function ReelsScreen({ route, navigation }) {
     fetchUserProgress();
     loadUnlockedVideos();
     loadSettings();
-  }, [route.params?.videoId]);
+  }, [route.params?.videoId, route.params?.chapterId, route.params?.playlistType]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -314,7 +314,15 @@ export default function ReelsScreen({ route, navigation }) {
 
   const fetchVideos = async () => {
     try {
-      const response = await contentApi.getRecentReleases();
+      const chapterId = route.params?.chapterId;
+      const playlistType = route.params?.playlistType;
+      
+      let response;
+      if (chapterId && playlistType !== 'recent') {
+        response = await contentApi.getEpisodes(chapterId);
+      } else {
+        response = await contentApi.getRecentReleases();
+      }
       setVideoData(response.data);
     } catch (error) {
       console.error('Error fetching videos:', error);
