@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const bcrypt = require('bcryptjs');
 const adminAuth = require('../middleware/adminAuth');
 const auth = require('../middleware/auth');
 const multer = require('multer');
@@ -483,6 +484,123 @@ router.delete('/videos/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete error:', error);
     res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
+
+// Rename Chapter
+router.put('/chapters/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Chapter name is required' });
+    }
+    await db.query('UPDATE chapters SET name = $1 WHERE id = $2', [name, id]);
+    res.json({ message: 'Chapter renamed successfully' });
+  } catch (error) {
+    console.error('Rename chapter error:', error);
+    res.status(500).json({ error: 'Failed to rename chapter' });
+  }
+});
+
+// Delete Chapter (and clean up files from disk)
+router.delete('/chapters/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Get all episodes in this chapter
+    const episodesQuery = await db.query('SELECT video_url, thumbnail_url FROM episodes WHERE chapter_id = $1', [id]);
+    const episodes = episodesQuery.rows;
+
+    // 2. Begin Transaction
+    await db.query('BEGIN');
+
+    // Delete episodes from DB
+    await db.query('DELETE FROM episodes WHERE chapter_id = $1', [id]);
+    
+    // Delete chapter itself
+    await db.query('DELETE FROM chapters WHERE id = $1', [id]);
+
+    await db.query('COMMIT');
+
+    // 3. Clean up physical files from disk
+    for (const ep of episodes) {
+      const { video_url, thumbnail_url } = ep;
+      const publicId = extractPublicId(video_url);
+
+      if (video_url && video_url.startsWith('/uploads')) {
+        const videoPath = path.join(__dirname, '..', video_url);
+        if (fs.existsSync(videoPath)) {
+          try { fs.unlinkSync(videoPath); } catch (e) { console.error('Failed to delete video file:', e); }
+        }
+      }
+      if (thumbnail_url && thumbnail_url.startsWith('/uploads')) {
+        const thumbPath = path.join(__dirname, '..', thumbnail_url);
+        if (fs.existsSync(thumbPath)) {
+          try { fs.unlinkSync(thumbPath); } catch (e) { console.error('Failed to delete thumbnail file:', e); }
+        }
+      }
+      if (publicId) {
+        try {
+          await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+        } catch (e) {
+          console.error('Failed to delete video from cloudinary:', e);
+        }
+      }
+    }
+
+    res.json({ message: 'Chapter and all associated videos deleted successfully' });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    console.error('Delete chapter error:', error);
+    res.status(500).json({ error: 'Failed to delete chapter' });
+  }
+});
+
+// Rename Subject
+router.put('/subjects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Subject name is required' });
+    }
+    await db.query('UPDATE subjects SET name = $1 WHERE id = $2', [name, id]);
+    res.json({ message: 'Subject renamed successfully' });
+  } catch (error) {
+    console.error('Rename subject error:', error);
+    res.status(500).json({ error: 'Failed to rename subject' });
+  }
+});
+
+// Change Admin Password
+router.post('/change-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const adminId = req.user.adminId;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    const adminQuery = await db.query('SELECT password FROM admins WHERE id = $1', [adminId]);
+    if (adminQuery.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found' });
+    }
+
+    const admin = adminQuery.rows[0];
+    const isMatch = await bcrypt.compare(currentPassword, admin.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE admins SET password = $1 WHERE id = $2', [hashedPassword, adminId]);
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to update password' });
   }
 });
 

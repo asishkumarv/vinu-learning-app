@@ -278,7 +278,7 @@ export default function HomeScreen({ navigation }) {
                                 styles.subjectText,
                                 { color: selectedChapter === ch.id ? '#FFFFFF' : colors.chipText }
                               ]}>
-                                {ch.title}
+                                {ch.name}
                               </Text>
                             </TouchableOpacity>
                           ))}

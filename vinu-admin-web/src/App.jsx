@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Upload, LogOut, Video, Eye, EyeOff } from 'lucide-react';
+import { LayoutDashboard, Users, Upload, LogOut, Video, Eye, EyeOff, Settings } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import UsersPage from './pages/Users';
 import UploadPage from './pages/Upload';
 import VideosPage from './pages/Videos';
+import SettingsPage from './pages/Settings';
 import axios from 'axios';
 
 axios.defaults.baseURL = 'https://api.vinuh.in/api';
@@ -33,6 +34,10 @@ function Sidebar({ onLogout }) {
       <NavLink to="/upload" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
         <Upload size={20} />
         <span>Upload Video</span>
+      </NavLink>
+      <NavLink to="/settings" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
+        <Settings size={20} />
+        <span>Settings</span>
       </NavLink>
       
       <div style={{ marginTop: 'auto' }}>
@@ -167,6 +172,7 @@ function App() {
             <Route path="/users" element={<UsersPage />} />
             <Route path="/videos" element={<VideosPage />} />
             <Route path="/upload" element={<UploadPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>
       </div>

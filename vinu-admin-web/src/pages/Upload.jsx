@@ -1,6 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+const SearchableDropdown = ({ name, value, options, placeholder, onChange, required, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectOption = (optName) => {
+    onChange({ target: { name, value: optName } });
+    setIsOpen(false);
+  };
+
+  const handleInputChange = (e) => {
+    onChange(e);
+    setIsOpen(true);
+  };
+
+  const filteredOptions = options.filter(opt => 
+    opt.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={handleInputChange}
+          placeholder={placeholder}
+          required={required}
+          disabled={disabled}
+          onFocus={() => { if (!disabled) setIsOpen(true); }}
+          autoComplete="off"
+          style={{ paddingRight: '2.5rem' }}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => { if (!disabled) setIsOpen(!isOpen); }}
+          style={{
+            position: 'absolute',
+            right: '1rem',
+            background: 'none',
+            border: 'none',
+            color: '#94A3B8',
+            cursor: disabled ? 'default' : 'pointer',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            opacity: disabled ? 0.3 : 0.7
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      {isOpen && !disabled && (
+        <div style={{
+          position: 'absolute',
+          top: '105%',
+          left: 0,
+          right: 0,
+          maxHeight: '200px',
+          overflowY: 'auto',
+          backgroundColor: '#151C2C',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '0.75rem',
+          zIndex: 9999,
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+          marginTop: '4px'
+        }}>
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((opt, idx) => (
+              <div
+                key={idx}
+                onClick={() => handleSelectOption(opt)}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  cursor: 'pointer',
+                  color: '#F8FAFC',
+                  fontSize: '0.95rem',
+                  borderBottom: idx < filteredOptions.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(99, 102, 241, 0.15)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                {opt}
+              </div>
+            ))
+          ) : (
+            <div style={{ padding: '0.75rem 1.25rem', color: '#94A3B8', fontSize: '0.95rem', fontStyle: 'italic' }}>
+              Create new: "{value}"
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function UploadPage() {
   const [categories, setCategories] = useState({ classes: [], subjects: [], chapters: [] });
   const [formData, setFormData] = useState({
@@ -133,26 +244,40 @@ export default function UploadPage() {
 
           <div className="form-group">
             <label>Class / Section</label>
-            <input type="text" name="className" list="classes-list" placeholder="Select or type new..." value={formData.className} onChange={handleInputChange} autoComplete="off" required />
-            <datalist id="classes-list">
-              {getFilteredClasses().map(c => <option key={c.id} value={c.name} />)}
-            </datalist>
+            <SearchableDropdown
+              name="className"
+              value={formData.className}
+              options={getFilteredClasses().map(c => c.name)}
+              placeholder="Select or type new..."
+              onChange={handleInputChange}
+              required
+            />
           </div>
 
           <div className="form-group">
             <label>Subject</label>
-            <input type="text" name="subjectName" list="subjects-list" placeholder="Select or type new..." value={formData.subjectName} onChange={handleInputChange} autoComplete="off" required disabled={!formData.className} />
-            <datalist id="subjects-list">
-              {getFilteredSubjects().map(s => <option key={s.id} value={s.name} />)}
-            </datalist>
+            <SearchableDropdown
+              name="subjectName"
+              value={formData.subjectName}
+              options={getFilteredSubjects().map(s => s.name)}
+              placeholder="Select or type new..."
+              onChange={handleInputChange}
+              required
+              disabled={!formData.className}
+            />
           </div>
 
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>Chapter</label>
-            <input type="text" name="chapterName" list="chapters-list" placeholder="Select or type new..." value={formData.chapterName} onChange={handleInputChange} autoComplete="off" required disabled={!formData.subjectName} />
-            <datalist id="chapters-list">
-              {getFilteredChapters().map(c => <option key={c.id} value={c.name} />)}
-            </datalist>
+            <SearchableDropdown
+              name="chapterName"
+              value={formData.chapterName}
+              options={getFilteredChapters().map(c => c.name)}
+              placeholder="Select or type new..."
+              onChange={handleInputChange}
+              required
+              disabled={!formData.subjectName}
+            />
           </div>
 
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
