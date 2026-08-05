@@ -36,7 +36,7 @@ exports.register = async (req, res) => {
     otps.delete(mobile);
 
     // Generate JWT
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
 
     res.status(200).json({ message: 'User registered successfully', token, user });
   } catch (error) {
@@ -80,7 +80,7 @@ exports.verifyOtp = async (req, res) => {
     otps.delete(mobile);
 
     // Generate JWT
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
 
     res.status(200).json({
       message: 'Login successful',

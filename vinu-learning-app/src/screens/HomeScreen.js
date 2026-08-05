@@ -85,6 +85,11 @@ export default function HomeScreen({ navigation }) {
       setVideos([]);
     } else {
       setExpandedClass(clsId);
+      setSubjects([]);
+      setSelectedSubject(null);
+      setChapters([]);
+      setSelectedChapter(null);
+      setVideos([]);
       setLoading(true);
       try {
         const response = await contentApi.getSubjects(clsId);
@@ -95,6 +100,16 @@ export default function HomeScreen({ navigation }) {
         setLoading(false);
       }
     }
+  };
+
+  const handleStateTabPress = (name) => {
+    setActiveState(name);
+    setExpandedClass(null);
+    setSubjects([]);
+    setSelectedSubject(null);
+    setChapters([]);
+    setSelectedChapter(null);
+    setVideos([]);
   };
 
   const handleSubjectPress = async (subId) => {
@@ -160,7 +175,7 @@ export default function HomeScreen({ navigation }) {
         { backgroundColor: activeState === name ? colors.surface : colors.chip + '40' },
         activeState === name && styles.activeStateTab
       ]}
-      onPress={() => setActiveState(name)}
+      onPress={() => handleStateTabPress(name)}
     >
       <View style={[styles.stateIcon, { backgroundColor: color }]} />
       <Text style={[
