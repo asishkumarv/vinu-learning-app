@@ -11,6 +11,7 @@ import {
   StatusBar,
   LogBox,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { contentApi, progressApi } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UnlockModal from '../components/UnlockModal';
+import TrackPlayer from '../services/TrackPlayerWrapper';
 
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
@@ -36,6 +38,11 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
   const [isLoading, setIsLoading] = useState(true);
   const lastTap = useRef(null);
 
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   useEffect(() => {
     const handlePlayPause = async () => {
       try {
@@ -43,6 +50,9 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
           await videoRef.current?.playAsync();
         } else {
           await videoRef.current?.pauseAsync();
+          if (!isActive) {
+            await TrackPlayer.reset().catch(() => {});
+          }
         }
       } catch (e) {
         // Silently catch play/pause interruptions
@@ -50,6 +60,59 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
     };
     handlePlayPause();
   }, [isActive, isFocused, isLocked]);
+
+  useEffect(() => {
+    if (!isActive || !isFocused || isLocked) {
+      return;
+    }
+
+    const handleAppStateChange = async (nextAppState) => {
+      console.log('AppState changed to:', nextAppState);
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (statusRef.current.isPlaying && videoRef.current) {
+          const currentPosMs = statusRef.current.positionMillis || 0;
+          console.log('App backgrounded: pausing video and playing audio via TrackPlayer at:', currentPosMs);
+          
+          try {
+            await videoRef.current.pauseAsync();
+            
+            await TrackPlayer.reset();
+            await TrackPlayer.add({
+              id: item.id.toString(),
+              url: item.video_url ? item.video_url : contentApi.getVideoUrl(item.id),
+              title: item.title,
+              artist: item.author || 'Dr. Vinuh',
+            });
+            await TrackPlayer.seekTo(currentPosMs / 1000);
+            await TrackPlayer.play();
+          } catch (err) {
+            console.error('Error starting TrackPlayer on background transition:', err);
+          }
+        }
+      } else if (nextAppState === 'active') {
+        try {
+          const positionSec = await TrackPlayer.getPosition();
+          console.log('TrackPlayer position:', positionSec);
+          
+          await TrackPlayer.reset();
+          
+          if (videoRef.current) {
+            const newPosMs = Math.floor(positionSec * 1000);
+            console.log('Seeking video component to:', newPosMs);
+            await videoRef.current.setPositionAsync(newPosMs);
+            await videoRef.current.playAsync();
+          }
+        } catch (err) {
+          console.error('Error restoring playback state from TrackPlayer:', err);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, [isActive, isFocused, isLocked, item]);
 
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
@@ -293,7 +356,9 @@ export default function ReelsScreen({ route, navigation }) {
   useFocusEffect(
     React.useCallback(() => {
       loadSettings();
-      return () => {};
+      return () => {
+        TrackPlayer.reset().catch(() => {});
+      };
     }, [])
   );
 

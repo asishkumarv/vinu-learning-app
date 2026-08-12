@@ -1,0 +1,19 @@
+# Node
+vinu-learning-app/node_modules
+*.log
+
+# Android build outputs and caches
+vinu-learning-app/android/.gradle
+vinu-learning-app/android/.kotlin
+vinu-learning-app/android/build
+vinu-learning-app/android/app/build
+vinu-learning-app/android/local.properties
+
+# iOS build outputs and caches
+vinu-learning-app/ios/Pods
+vinu-learning-app/ios/build
+
+# Expo caches and outputs
+vinu-learning-app/.expo
+vinu-learning-app/dist
+vinu-learning-app/web-build

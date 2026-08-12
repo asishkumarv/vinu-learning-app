@@ -9,6 +9,14 @@ vinu-learning-app/.expo/
 vinu-learning-app/dist/
 vinu-learning-app/web-build/
 vinu-learning-app/expo-env.d.ts
+vinu-learning-app/android/.gradle/
+vinu-learning-app/android/.kotlin/
+vinu-learning-app/android/build/
+vinu-learning-app/android/app/build/
+vinu-learning-app/android/local.properties
+vinu-learning-app/ios/Pods/
+vinu-learning-app/ios/build/
+*.log
 
 # Native
 .kotlin/

@@ -1,0 +1,19 @@
+# Dependencies
+node_modules
+*.log
+
+# Android build outputs and caches
+android/.gradle
+android/.kotlin
+android/build
+android/app/build
+android/local.properties
+
+# iOS build outputs and caches
+ios/Pods
+ios/build
+
+# Expo caches and outputs
+.expo
+dist
+web-build

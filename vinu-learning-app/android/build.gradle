@@ -20,5 +20,52 @@ allprojects {
   }
 }
 
+task patchGraphicsConversions {
+    doLast {
+        def cachesDir = new File(gradle.gradleUserHomeDir, "caches")
+        if (cachesDir.exists()) {
+            cachesDir.eachFileRecurse { file ->
+                if (file.name == "graphicsConversions.h") {
+                    println "Checking: ${file.absolutePath}"
+                    def content = file.text
+                    def target = 'return std::format("{}%", dimension.value);'
+                    if (content.contains(target)) {
+                        def replacement = '''{
+      char buffer[256];
+      std::snprintf(buffer, sizeof(buffer), "%.9g%%", dimension.value);
+      return buffer;
+    }'''
+                        file.text = content.replace(target, replacement)
+                        println "Successfully patched graphicsConversions.h in Gradle cache!"
+                    }
+                }
+            }
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    def extractionTasks = []
+    allprojects { proj ->
+      proj.tasks.forEach { t ->
+        if (t.name.contains("configureCMake") || (t.name.contains("prefab") && t.name.contains("Configure")) || t.name.contains("generateJsonModel")) {
+          extractionTasks.add(t)
+        }
+      }
+    }
+    
+    tasks.named("patchGraphicsConversions").configure {
+      dependsOn extractionTasks
+    }
+
+    allprojects { proj ->
+      proj.tasks.forEach { t ->
+        if (t.name.contains("buildCMake") || t.name.contains("externalNativeBuild")) {
+          t.dependsOn ":patchGraphicsConversions"
+        }
+      }
+    }
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
