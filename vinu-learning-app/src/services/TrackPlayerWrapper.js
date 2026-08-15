@@ -52,6 +52,7 @@ if (!TrackPlayer) {
   Event = {
     PlaybackState: 'playback-state',
     PlaybackTrackChanged: 'playback-track-changed',
+    PlaybackActiveTrackChanged: 'playback-active-track-changed',
     PlaybackQueueEnded: 'playback-queue-ended',
     RemotePlay: 'remote-play',
     RemotePause: 'remote-pause',

@@ -383,32 +383,34 @@ export default function ReelsScreen({ route, navigation }) {
             console.log('Parent Backgrounding: transferring to TrackPlayer at', currentPosMs);
             try {
               await currVideoRef.pauseAsync();
+              await AsyncStorage.setItem('isSettingUpBackground', 'true');
               await TrackPlayer.reset();
 
               const list = videoDataRef.current || [];
               let tracks = [];
-              if (autoPlayRef.current && list.length > 0) {
-                tracks = list.slice(currIdx).map((v) => ({
+              if (list.length > 0) {
+                tracks = list.map((v) => ({
                   id: v.id.toString(),
                   url: v.video_url ? v.video_url : contentApi.getVideoUrl(v.id),
                   title: v.title,
                   artist: v.author || 'Dr. Vinuh',
+                  artwork: v.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg',
                 }));
-              } else {
-                const v = list[currIdx];
-                tracks = [{
-                  id: v.id.toString(),
-                  url: v.video_url ? v.video_url : contentApi.getVideoUrl(v.id),
-                  title: v.title,
-                  artist: v.author || 'Dr. Vinuh',
-                }];
               }
 
-              await TrackPlayer.add(tracks);
-              await TrackPlayer.seekTo(currentPosMs / 1000);
-              await TrackPlayer.play();
+              if (tracks.length > 0) {
+                await TrackPlayer.add(tracks);
+                await TrackPlayer.skip(currIdx);
+                await TrackPlayer.seekTo(currentPosMs / 1000);
+                await TrackPlayer.play();
+              }
+              
+              setTimeout(async () => {
+                await AsyncStorage.setItem('isSettingUpBackground', 'false');
+              }, 500);
             } catch (e) {
               console.warn('TrackPlayer background start error:', e);
+              await AsyncStorage.setItem('isSettingUpBackground', 'false');
             }
           } else {
             // Expo Go: expo-av staysActiveInBackground is active, so audio continues smoothly without any pause or stutter
@@ -418,16 +420,17 @@ export default function ReelsScreen({ route, navigation }) {
       } else if (nextAppState === 'active') {
         if (hasNativeModule) {
           try {
-            const activeTrackOffset = (await TrackPlayer.getActiveTrackIndex()) || 0;
+            const list = videoDataRef.current || [];
+            const activeTrackIndex = await TrackPlayer.getActiveTrackIndex();
             const positionSec = (await TrackPlayer.getPosition()) || 0;
-            console.log('Parent Foreground: activeTrackOffset =', activeTrackOffset, 'positionSec =', positionSec);
+            console.log('Parent Foreground: activeTrackIndex =', activeTrackIndex, 'positionSec =', positionSec);
 
             await TrackPlayer.reset();
 
-            const finalIdx = currIdx + activeTrackOffset;
+            const finalIdx = (activeTrackIndex !== null && activeTrackIndex !== undefined && activeTrackIndex >= 0 && activeTrackIndex < list.length) ? activeTrackIndex : currIdx;
             const finalPosMs = Math.floor(positionSec * 1000);
 
-            if (finalIdx !== currIdx) {
+            if (finalIdx !== currIdx && finalIdx >= 0 && finalIdx < list.length) {
               setActiveVideoIndex(finalIdx);
               flatListRef.current?.scrollToIndex({ index: finalIdx, animated: false });
             }
