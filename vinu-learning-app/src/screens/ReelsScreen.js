@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   AppState,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,14 +22,31 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { contentApi, progressApi } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UnlockModal from '../components/UnlockModal';
-import TrackPlayer from '../services/TrackPlayerWrapper';
+import TrackPlayer, { hasNativeModule } from '../services/TrackPlayerWrapper';
 
 LogBox.ignoreLogs(['[expo-av]: Video component from `expo-av` is deprecated']);
 
-const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, videoWidth, isCompleted, onToggleComplete, isUnlocked, onOpenUnlockModal, autoPlay, onAutoNext }) => {
+const VideoItem = ({
+  item,
+  index,
+  totalCount,
+  isActive,
+  isFocused,
+  videoHeight,
+  videoWidth,
+  isCompleted,
+  onToggleComplete,
+  isUnlocked,
+  onOpenUnlockModal,
+  autoPlay,
+  onAutoNext,
+  onRegisterVideo,
+  onStatusUpdate,
+  resumeSignal,
+}) => {
   const safeAreaInsets = useSafeAreaInsets();
   const videoRef = useRef(null);
-  
+
   const isLocked = item.is_free === false && !isUnlocked;
   const [status, setStatus] = useState({});
   const [videoRatio, setVideoRatio] = useState(16 / 9);
@@ -38,10 +55,11 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
   const [isLoading, setIsLoading] = useState(true);
   const lastTap = useRef(null);
 
-  const statusRef = useRef(status);
   useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+    if (videoRef.current) {
+      onRegisterVideo?.(index, videoRef.current);
+    }
+  }, [index, onRegisterVideo]);
 
   useEffect(() => {
     const handlePlayPause = async () => {
@@ -50,77 +68,37 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
           await videoRef.current?.playAsync();
         } else {
           await videoRef.current?.pauseAsync();
-          if (!isActive) {
-            await TrackPlayer.reset().catch(() => {});
-          }
         }
       } catch (e) {
-        // Silently catch play/pause interruptions
+        // Silently handle interruptions
       }
     };
     handlePlayPause();
   }, [isActive, isFocused, isLocked]);
 
   useEffect(() => {
-    if (!isActive || !isFocused || isLocked) {
-      return;
+    if (resumeSignal && resumeSignal.index === index && videoRef.current) {
+      const pos = resumeSignal.positionMillis || 0;
+      console.log(`VideoItem [${index}] atomic resume to pos: ${pos}`);
+      videoRef.current.setStatusAsync({
+        shouldPlay: true,
+        positionMillis: pos,
+      }).catch((e) => {
+        console.warn('Resume status error:', e);
+        videoRef.current?.playAsync().catch(() => {});
+      });
     }
-
-    const handleAppStateChange = async (nextAppState) => {
-      console.log('AppState changed to:', nextAppState);
-      if (nextAppState === 'background' || nextAppState === 'inactive') {
-        if (statusRef.current.isPlaying && videoRef.current) {
-          const currentPosMs = statusRef.current.positionMillis || 0;
-          console.log('App backgrounded: pausing video and playing audio via TrackPlayer at:', currentPosMs);
-          
-          try {
-            await videoRef.current.pauseAsync();
-            
-            await TrackPlayer.reset();
-            await TrackPlayer.add({
-              id: item.id.toString(),
-              url: item.video_url ? item.video_url : contentApi.getVideoUrl(item.id),
-              title: item.title,
-              artist: item.author || 'Dr. Vinuh',
-            });
-            await TrackPlayer.seekTo(currentPosMs / 1000);
-            await TrackPlayer.play();
-          } catch (err) {
-            console.error('Error starting TrackPlayer on background transition:', err);
-          }
-        }
-      } else if (nextAppState === 'active') {
-        try {
-          const positionSec = await TrackPlayer.getPosition();
-          console.log('TrackPlayer position:', positionSec);
-          
-          await TrackPlayer.reset();
-          
-          if (videoRef.current) {
-            const newPosMs = Math.floor(positionSec * 1000);
-            console.log('Seeking video component to:', newPosMs);
-            await videoRef.current.setPositionAsync(newPosMs);
-            await videoRef.current.playAsync();
-          }
-        } catch (err) {
-          console.error('Error restoring playback state from TrackPlayer:', err);
-        }
-      }
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => {
-      subscription.remove();
-    };
-  }, [isActive, isFocused, isLocked, item]);
+  }, [resumeSignal, index]);
 
   const onPlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
+    onStatusUpdate?.(index, newStatus);
+
     if (newStatus.didJustFinish) {
       console.log('Video finished:', item.title);
       onToggleComplete(item.id, 'completed');
       if (autoPlay) {
-        console.log('Auto-playing next...');
+        console.log('Auto-playing next video...');
         const nextIndex = index + 1;
         if (nextIndex < totalCount) {
           onAutoNext?.(nextIndex);
@@ -198,12 +176,12 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
   return (
     <View style={[styles.videoContainer, { height: videoHeight, width: videoWidth }]}>
       <Pressable onPress={handleVideoTap} style={styles.videoWrapper}>
-         <Video
+        <Video
           key={item.video_url || item.id}
           ref={videoRef}
           source={{ uri: item.video_url ? item.video_url : contentApi.getVideoUrl(item.id) }}
           style={[
-            videoRatio >= 1 
+            videoRatio >= 1
               ? { width: '100%', height: undefined, aspectRatio: videoRatio }
               : { height: '100%', width: undefined, aspectRatio: videoRatio },
             isLocked && { opacity: 0.3 }
@@ -224,7 +202,7 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
           onLoad={() => setIsLoading(false)}
           onError={() => setIsLoading(false)}
         />
-        
+
         {isLocked && (
           <View style={styles.lockedPlayerOverlay}>
             <View style={styles.lockCircle}>
@@ -241,11 +219,11 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
             </TouchableOpacity>
           </View>
         )}
-        
+
         {showSeekFeedback && (
           <View style={[styles.seekFeedback, showSeekFeedback === 'left' ? { left: 40 } : { right: 40 }]}>
             <View style={styles.seekCircle}>
-              <Ionicons name={showSeekFeedback === 'left' ? "play-back" : "play-forward"} size={30} color="#FFF" />
+              <Ionicons name={showSeekFeedback === 'left' ? 'play-back' : 'play-forward'} size={30} color="#FFF" />
             </View>
             <Text style={styles.seekText}>10s</Text>
           </View>
@@ -257,7 +235,7 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
           </View>
         )}
       </Pressable>
-      
+
       {/* HUD AND CONTROLS */}
       {(!status.isPlaying || !isActive) && !isLoading && (
         <View style={styles.hudContainer} pointerEvents="box-none">
@@ -266,13 +244,13 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
             style={styles.topGradient}
             pointerEvents="none"
           />
-          
+
           <View style={styles.topOverlay} pointerEvents="box-none">
             <View style={styles.detailsContainer}>
               <Text style={styles.titleText}>{item.title}</Text>
               <Text style={styles.authorText}>By {item.author || 'Dr. Vinuh'}</Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.completeButton, { backgroundColor: isCompleted ? '#4CAF50' : 'rgba(0,0,0,0.5)' }]}
               onPress={() => onToggleComplete(item.id, isCompleted ? 'started' : 'completed')}
             >
@@ -298,24 +276,24 @@ const VideoItem = ({ item, index, totalCount, isActive, isFocused, videoHeight, 
 
             <View style={styles.buttonRow} pointerEvents="box-none">
               <TouchableOpacity onPress={() => setIsMuted(!isMuted)} style={styles.iconBtn}>
-                <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={22} color="#FFF" />
+                <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={22} color="#FFF" />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => seek(-10000, 'left')} style={styles.iconBtn}>
                 <Ionicons name="play-back" size={24} color="#FFF" />
               </TouchableOpacity>
               <TouchableOpacity onPress={togglePlayback} style={styles.mainPlayBtn}>
-                <Ionicons name={status.isPlaying ? "pause" : "play"} size={30} color="#FFF" />
+                <Ionicons name={status.isPlaying ? 'pause' : 'play'} size={30} color="#FFF" />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => seek(10000, 'right')} style={styles.iconBtn}>
                 <Ionicons name="play-forward" size={24} color="#FFF" />
               </TouchableOpacity>
-              <View style={{ width: 44 }} /> 
+              <View style={{ width: 44 }} />
             </View>
           </View>
         </View>
       )}
 
-      {/* GLOBAL LOADING OVERLAY FOR THIS ITEM - ALWAYS ON TOP */}
+      {/* GLOBAL LOADING OVERLAY */}
       {isLoading && (
         <View style={styles.bufferingOverlay} pointerEvents="none">
           <View style={styles.loaderBox}>
@@ -344,7 +322,26 @@ export default function ReelsScreen({ route, navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedVideoToUnlock, setSelectedVideoToUnlock] = useState(null);
   const [autoPlay, setAutoPlay] = useState(false);
+  const [resumeSignal, setResumeSignal] = useState(null);
+
   const flatListRef = useRef(null);
+  const videoRefs = useRef({});
+  const videoStatusRef = useRef({});
+
+  const activeIndexRef = useRef(activeVideoIndex);
+  useEffect(() => {
+    activeIndexRef.current = activeVideoIndex;
+  }, [activeVideoIndex]);
+
+  const autoPlayRef = useRef(autoPlay);
+  useEffect(() => {
+    autoPlayRef.current = autoPlay;
+  }, [autoPlay]);
+
+  const videoDataRef = useRef(videoData);
+  useEffect(() => {
+    videoDataRef.current = videoData;
+  }, [videoData]);
 
   useEffect(() => {
     fetchVideos();
@@ -357,10 +354,102 @@ export default function ReelsScreen({ route, navigation }) {
     React.useCallback(() => {
       loadSettings();
       return () => {
-        TrackPlayer.reset().catch(() => {});
+        if (hasNativeModule) {
+          TrackPlayer.reset().catch(() => {});
+        }
       };
     }, [])
   );
+
+  const unlockedVideosRef = useRef(unlockedVideos);
+  useEffect(() => {
+    unlockedVideosRef.current = unlockedVideos;
+  }, [unlockedVideos]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const handleAppStateChange = async (nextAppState) => {
+      console.log('Parent AppState changed to:', nextAppState);
+      const currIdx = activeIndexRef.current;
+      const currStatus = videoStatusRef.current[currIdx] || {};
+      const currVideoRef = videoRefs.current[currIdx];
+
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (currStatus.isPlaying && currVideoRef) {
+          const currentPosMs = currStatus.positionMillis || 0;
+
+          if (hasNativeModule) {
+            console.log('Parent Backgrounding: transferring to TrackPlayer at', currentPosMs);
+            try {
+              await currVideoRef.pauseAsync();
+              await TrackPlayer.reset();
+
+              const list = videoDataRef.current || [];
+              let tracks = [];
+              if (autoPlayRef.current && list.length > 0) {
+                tracks = list.slice(currIdx).map((v) => ({
+                  id: v.id.toString(),
+                  url: v.video_url ? v.video_url : contentApi.getVideoUrl(v.id),
+                  title: v.title,
+                  artist: v.author || 'Dr. Vinuh',
+                }));
+              } else {
+                const v = list[currIdx];
+                tracks = [{
+                  id: v.id.toString(),
+                  url: v.video_url ? v.video_url : contentApi.getVideoUrl(v.id),
+                  title: v.title,
+                  artist: v.author || 'Dr. Vinuh',
+                }];
+              }
+
+              await TrackPlayer.add(tracks);
+              await TrackPlayer.seekTo(currentPosMs / 1000);
+              await TrackPlayer.play();
+            } catch (e) {
+              console.warn('TrackPlayer background start error:', e);
+            }
+          } else {
+            // Expo Go: expo-av staysActiveInBackground is active, so audio continues smoothly without any pause or stutter
+            console.log('Parent Backgrounding: expo-av audio continuing in background at', currentPosMs);
+          }
+        }
+      } else if (nextAppState === 'active') {
+        if (hasNativeModule) {
+          try {
+            const activeTrackOffset = (await TrackPlayer.getActiveTrackIndex()) || 0;
+            const positionSec = (await TrackPlayer.getPosition()) || 0;
+            console.log('Parent Foreground: activeTrackOffset =', activeTrackOffset, 'positionSec =', positionSec);
+
+            await TrackPlayer.reset();
+
+            const finalIdx = currIdx + activeTrackOffset;
+            const finalPosMs = Math.floor(positionSec * 1000);
+
+            if (finalIdx !== currIdx) {
+              setActiveVideoIndex(finalIdx);
+              flatListRef.current?.scrollToIndex({ index: finalIdx, animated: false });
+            }
+            setResumeSignal({ index: finalIdx, positionMillis: finalPosMs, time: Date.now() });
+          } catch (e) {
+            console.warn('TrackPlayer restore error:', e);
+          }
+        } else {
+          // Expo Go: ensure active video remains playing smoothly in sync
+          const ref = videoRefs.current[currIdx];
+          if (ref) {
+            ref.playAsync().catch(() => {});
+          }
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, [isFocused]);
 
   const loadSettings = async () => {
     try {
@@ -393,7 +482,7 @@ export default function ReelsScreen({ route, navigation }) {
     try {
       const chapterId = route.params?.chapterId;
       const playlistType = route.params?.playlistType;
-      
+
       let response;
       if (chapterId && playlistType !== 'recent') {
         response = await contentApi.getEpisodes(chapterId);
@@ -408,7 +497,7 @@ export default function ReelsScreen({ route, navigation }) {
 
   useEffect(() => {
     if (route.params?.videoId && videoData.length > 0) {
-      const index = videoData.findIndex(v => Number(v.id) === Number(route.params.videoId));
+      const index = videoData.findIndex((v) => Number(v.id) === Number(route.params.videoId));
       if (index !== -1) {
         setActiveVideoIndex(index);
         setTimeout(() => {
@@ -422,7 +511,7 @@ export default function ReelsScreen({ route, navigation }) {
     try {
       const response = await progressApi.getUserProgress();
       const progressMap = {};
-      response.data.forEach(p => {
+      response.data.forEach((p) => {
         if (p.status === 'completed') {
           progressMap[p.episode_id] = true;
         }
@@ -435,11 +524,11 @@ export default function ReelsScreen({ route, navigation }) {
 
   const toggleComplete = async (id, newStatus) => {
     const isNowCompleted = newStatus === 'completed';
-    setCompletedVideos(prev => ({ ...prev, [id]: isNowCompleted }));
+    setCompletedVideos((prev) => ({ ...prev, [id]: isNowCompleted }));
     try {
       await progressApi.updateProgress({ episode_id: id, status: newStatus });
     } catch (error) {
-      console.error('Error updating progress:', error);
+      console.warn('Could not sync progress with server:', error?.message || error);
     }
   };
 
@@ -451,14 +540,14 @@ export default function ReelsScreen({ route, navigation }) {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 30 }).current;
 
-  const initialIndex = route.params?.videoId && videoData.length > 0 
-    ? videoData.findIndex(v => Number(v.id) === Number(route.params.videoId)) 
+  const initialIndex = route.params?.videoId && videoData.length > 0
+    ? videoData.findIndex((v) => Number(v.id) === Number(route.params.videoId))
     : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: '#000', paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
+
       {videoData.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Ionicons name="videocam-outline" size={80} color="rgba(255,255,255,0.2)" />
@@ -469,7 +558,7 @@ export default function ReelsScreen({ route, navigation }) {
           ref={flatListRef}
           data={videoData}
           renderItem={({ item, index }) => (
-            <VideoItem 
+            <VideoItem
               item={item}
               index={index}
               totalCount={videoData.length}
@@ -482,6 +571,13 @@ export default function ReelsScreen({ route, navigation }) {
               isUnlocked={unlockedVideos[item.id]}
               onOpenUnlockModal={openUnlockModal}
               autoPlay={autoPlay}
+              resumeSignal={resumeSignal}
+              onRegisterVideo={(idx, ref) => {
+                videoRefs.current[idx] = ref;
+              }}
+              onStatusUpdate={(idx, status) => {
+                videoStatusRef.current[idx] = status;
+              }}
               onAutoNext={(nextIndex) => {
                 setActiveVideoIndex(nextIndex);
                 setTimeout(() => {
@@ -502,13 +598,13 @@ export default function ReelsScreen({ route, navigation }) {
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          maxToRenderPerBatch={2}
-          windowSize={3}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={3}
+          windowSize={5}
         />
       )}
 
-      <UnlockModal 
+      <UnlockModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onUnlock={handleUnlockSuccess}
@@ -544,11 +640,11 @@ const styles = StyleSheet.create({
   mainPlayBtn: { backgroundColor: 'rgba(255,255,255,0.1)', width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 5 },
   topGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   bottomGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 180 },
-  bufferingOverlay: { 
-    ...StyleSheet.absoluteFillObject, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    backgroundColor: 'rgba(0,0,0,0.3)', 
+  bufferingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     zIndex: 100,
     elevation: 10,
   },

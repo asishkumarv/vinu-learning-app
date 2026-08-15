@@ -3,7 +3,7 @@ import { LogBox } from 'react-native';
 import { NavigationContainer, NavigationIndependentTree } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ThemeProvider } from './src/theme/ThemeContext';
-import TrackPlayer, { Capability } from './src/services/TrackPlayerWrapper';
+import TrackPlayer, { Capability, AppKilledPlaybackBehavior } from './src/services/TrackPlayerWrapper';
 import { playbackService } from './src/services/playbackService';
 
 // Silence shadow and textShadow deprecation warnings from react-native-web
@@ -14,23 +14,49 @@ LogBox.ignoreLogs([
   'textShadow* style props are deprecated',
 ]);
 
+import { Audio } from 'expo-av';
+
 TrackPlayer.registerPlaybackService(() => playbackService);
 
 export default function App() {
   useEffect(() => {
     async function setupPlayer() {
       try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (e) {
+        console.warn('Audio mode setup error:', e);
+      }
+
+      try {
         await TrackPlayer.setupPlayer();
         await TrackPlayer.updateOptions({
+          android: {
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+          },
           capabilities: [
             Capability.Play,
             Capability.Pause,
-            Capability.Stop,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
             Capability.SeekTo,
           ],
           compactCapabilities: [
             Capability.Play,
             Capability.Pause,
+            Capability.SkipToNext,
+          ],
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+            Capability.SeekTo,
           ],
         });
       } catch (e) {
