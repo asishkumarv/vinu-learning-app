@@ -1,8 +1,19 @@
 diff --git a/node_modules/react-native-worklets/android/build.gradle b/node_modules/react-native-worklets/android/build.gradle
-index 021f5bc..c889bb8 100644
+index 021f5bc..f67f954 100644
 --- a/node_modules/react-native-worklets/android/build.gradle
 +++ b/node_modules/react-native-worklets/android/build.gradle
-@@ -308,14 +308,14 @@ task assertMinimalReactNativeVersionTask {
+@@ -89,9 +89,7 @@ def getStaticFeatureFlags() {
+     return featureFlags.collect { key, value -> "[${key}:${value}]" }.join("")
+ }
+ 
+-if (isNewArchitectureEnabled()) {
+-    apply plugin: "com.facebook.react"
+-}
++apply plugin: "com.facebook.react"
+ 
+ def packageDir = project.projectDir.parentFile
+ def reactNativeRootDir = resolveReactNativeDirectory()
+@@ -308,14 +306,14 @@ task assertMinimalReactNativeVersionTask {
  
  preBuild.dependsOn(assertMinimalReactNativeVersionTask)
  
