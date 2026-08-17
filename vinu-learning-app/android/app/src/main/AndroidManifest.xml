@@ -33,5 +33,9 @@
         <data android:scheme="vinuh"/>
       </intent-filter>
     </activity>
+    <service
+        android:name="expo.modules.video.playbackService.ExpoVideoPlaybackService"
+        android:foregroundServiceType="mediaPlayback"
+        android:exported="false" />
   </application>
 </manifest>
