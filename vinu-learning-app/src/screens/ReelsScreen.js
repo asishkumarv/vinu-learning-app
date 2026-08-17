@@ -340,6 +340,7 @@ export default function ReelsScreen({ route, navigation }) {
     playerInstance.loop = false;
     playerInstance.timeUpdateEventInterval = 0.25;
     playerInstance.showNowPlayingNotification = true;
+    playerInstance.staysActiveInBackground = true;
   });
 
   // Source swapping effect when active track transitions
