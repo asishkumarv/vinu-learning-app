@@ -10,6 +10,8 @@ import {
   StatusBar,
   ActivityIndicator,
   Image,
+  PanResponder,
+  AppState,
 } from 'react-native';
 import { useEvent, useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -52,6 +54,97 @@ const ActiveVideoItem = ({
   const currentTime = timeEvent ? timeEvent.currentTime : player.currentTime;
 
   const duration = player.duration || 0;
+
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubbingTime, setScrubbingTime] = useState(0);
+
+  const progressBarRef = useRef(null);
+  const progressBarLayout = useRef({ pageX: 0, width: 0 });
+  const scrubStateRef = useRef({ duration: 0, player: null, isPlaying: false });
+  const wasPlayingBeforeScrub = useRef(false);
+  const lastTouchX = useRef(0);
+
+  // Update ref to avoid stale closures in PanResponder
+  useEffect(() => {
+    scrubStateRef.current = { duration, player, isPlaying };
+  }, [duration, player, isPlaying]);
+
+  const onLayoutProgressBar = () => {
+    progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+      if (width > 0) {
+        progressBarLayout.current = { pageX, width };
+      }
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt, gestureState) => {
+        setIsScrubbing(true);
+        const { isPlaying: currentlyPlaying, player: currentPlayer } = scrubStateRef.current;
+        wasPlayingBeforeScrub.current = currentlyPlaying;
+        if (currentlyPlaying && currentPlayer) {
+          currentPlayer.pause();
+        }
+
+        progressBarRef.current?.measure((x, y, width, height, pageX, pageY) => {
+          if (width > 0) {
+            progressBarLayout.current = { pageX, width };
+            const touchX = evt.nativeEvent.pageX || gestureState.x0;
+            lastTouchX.current = touchX;
+            const { duration: currentDuration } = scrubStateRef.current;
+            if (currentDuration > 0) {
+              const pct = Math.max(0, Math.min(1, (touchX - pageX) / width));
+              const targetTime = pct * currentDuration;
+              setScrubbingTime(targetTime);
+            }
+          }
+        });
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const { pageX, width } = progressBarLayout.current;
+        const { duration: currentDuration } = scrubStateRef.current;
+        if (width > 0 && currentDuration > 0) {
+          const touchX = evt.nativeEvent.pageX !== undefined && evt.nativeEvent.pageX !== null && evt.nativeEvent.pageX !== 0
+            ? evt.nativeEvent.pageX 
+            : gestureState.moveX || lastTouchX.current;
+          lastTouchX.current = touchX;
+          const pct = Math.max(0, Math.min(1, (touchX - pageX) / width));
+          const targetTime = pct * currentDuration;
+          setScrubbingTime(targetTime);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        setIsScrubbing(false);
+        const { pageX, width } = progressBarLayout.current;
+        const { duration: currentDuration, player: currentPlayer } = scrubStateRef.current;
+        if (width > 0 && currentDuration > 0 && currentPlayer) {
+          const touchX = evt.nativeEvent.pageX !== undefined && evt.nativeEvent.pageX !== null && evt.nativeEvent.pageX !== 0
+            ? evt.nativeEvent.pageX 
+            : lastTouchX.current;
+          const pct = Math.max(0, Math.min(1, (touchX - pageX) / width));
+          const targetTime = pct * currentDuration;
+          if (isFinite(targetTime)) {
+            currentPlayer.currentTime = Math.max(0, Math.min(currentDuration, targetTime));
+          }
+        }
+        if (wasPlayingBeforeScrub.current && currentPlayer) {
+          currentPlayer.play();
+        }
+        wasPlayingBeforeScrub.current = false;
+      },
+      onPanResponderTerminate: () => {
+        setIsScrubbing(false);
+        const { player: currentPlayer } = scrubStateRef.current;
+        if (wasPlayingBeforeScrub.current && currentPlayer) {
+          currentPlayer.play();
+        }
+        wasPlayingBeforeScrub.current = false;
+      },
+    })
+  ).current;
 
   // Handle mute change
   useEffect(() => {
@@ -108,18 +201,6 @@ const ActiveVideoItem = ({
     }
   };
 
-  const handleTimelinePress = (event) => {
-    const touchX = event.nativeEvent.locationX;
-    const timelineWidth = videoWidth - 120;
-    if (duration > 0 && timelineWidth > 0) {
-      const percentage = touchX / timelineWidth;
-      const newPosition = percentage * duration;
-      if (isFinite(newPosition)) {
-        player.currentTime = Math.max(0, Math.min(duration, newPosition));
-      }
-    }
-  };
-
   const formatTime = (seconds) => {
     if (!seconds || isNaN(seconds)) return '00:00';
     const minutes = Math.floor(seconds / 60);
@@ -127,7 +208,8 @@ const ActiveVideoItem = ({
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progress = (currentTime / duration) * 100 || 0;
+  const displayTime = isScrubbing ? scrubbingTime : currentTime;
+  const progress = (displayTime / duration) * 100 || 0;
   const controlsBottom = 110;
 
   return (
@@ -184,11 +266,17 @@ const ActiveVideoItem = ({
 
           <View style={[styles.controlBar, { bottom: controlsBottom + (safeAreaInsets?.bottom || 0) }]} pointerEvents="box-none">
             <View style={styles.timerRow}>
-              <Text style={styles.timeLabel}>{formatTime(currentTime)}</Text>
-              <Pressable onPress={handleTimelinePress} style={styles.progressBarContainer}>
-                <View style={styles.progressTrack} />
-                <View style={[styles.progressBar, { width: `${progress}%` }]} />
-              </Pressable>
+              <Text style={styles.timeLabel}>{formatTime(displayTime)}</Text>
+              <View
+                ref={progressBarRef}
+                onLayout={onLayoutProgressBar}
+                {...panResponder.panHandlers}
+                style={styles.progressBarContainer}
+              >
+                <View style={[styles.progressTrack, isScrubbing && styles.progressTrackActive]} />
+                <View style={[styles.progressBar, { width: `${progress}%` }, isScrubbing && styles.progressBarActive]} />
+                <View style={[styles.progressThumb, { left: `${progress}%` }, isScrubbing && styles.progressThumbActive]} />
+              </View>
               <Text style={styles.timeLabel}>{formatTime(duration)}</Text>
             </View>
 
@@ -332,6 +420,8 @@ export default function ReelsScreen({ route, navigation }) {
   const [autoPlay, setAutoPlay] = useState(false);
 
   const flatListRef = useRef(null);
+  const programmaticTargetRef = useRef(null);
+  const loadedVideoIdRef = useRef(null);
 
   // Initialize a single player instance for source reuse
   const activeVideo = videoData[activeVideoIndex];
@@ -346,21 +436,30 @@ export default function ReelsScreen({ route, navigation }) {
   // Source swapping effect when active track transitions
   useEffect(() => {
     if (activeVideo && player) {
-      const videoUrl = activeVideo.video_url ? activeVideo.video_url : contentApi.getVideoUrl(activeVideo.id);
-      player.replace({
-        uri: videoUrl,
-        metadata: {
-          title: activeVideo.title,
-          artist: activeVideo.author || 'Dr. Vinuh',
-          artwork: activeVideo.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg',
+      if (loadedVideoIdRef.current !== activeVideo.id) {
+        console.log('Swapping video source to:', activeVideo.title);
+        loadedVideoIdRef.current = activeVideo.id;
+        const videoUrl = activeVideo.video_url ? activeVideo.video_url : contentApi.getVideoUrl(activeVideo.id);
+        player.replace({
+          uri: videoUrl,
+          metadata: {
+            title: activeVideo.title,
+            artist: activeVideo.author || 'Dr. Vinuh',
+            artwork: activeVideo.thumbnail_url || 'https://img.freepik.com/free-vector/digital-online-education-background-concept-vector_1017-37513.jpg',
+          }
+        });
+        
+        // Control play state dynamically on source swap
+        if (activeVideo.is_free !== false || unlockedVideos[activeVideo.id]) {
+          player.play();
+        } else {
+          player.pause();
         }
-      });
-      
-      // Control play state dynamically
-      if (activeVideo.is_free !== false || unlockedVideos[activeVideo.id]) {
-        player.play();
       } else {
-        player.pause();
+        // Same video, check if unlocked status has been updated
+        if (activeVideo.is_free === false && unlockedVideos[activeVideo.id]) {
+          player.play();
+        }
       }
     }
   }, [activeVideoIndex, videoData, unlockedVideos, player, activeVideo]);
@@ -379,6 +478,30 @@ export default function ReelsScreen({ route, navigation }) {
       return () => {};
     }, [])
   );
+
+  const appStateRef = useRef(AppState.currentState);
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('App returned to foreground. Aligning FlatList scroll with activeVideoIndex:', activeVideoIndex);
+        if (flatListRef.current && videoData.length > 0 && activeVideoIndex < videoData.length) {
+          try {
+            programmaticTargetRef.current = activeVideoIndex;
+            flatListRef.current.scrollToIndex({ index: activeVideoIndex, animated: false });
+          } catch (err) {
+            console.warn('Failed to scroll FlatList on foreground:', err);
+          }
+        }
+      }
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, [activeVideoIndex, videoData]);
 
   const loadSettings = async () => {
     try {
@@ -428,6 +551,7 @@ export default function ReelsScreen({ route, navigation }) {
     if (route.params?.videoId && videoData.length > 0) {
       const index = videoData.findIndex((v) => Number(v.id) === Number(route.params.videoId));
       if (index !== -1) {
+        programmaticTargetRef.current = index;
         setActiveVideoIndex(index);
         setTimeout(() => {
           flatListRef.current?.scrollToIndex({ index, animated: false });
@@ -463,7 +587,14 @@ export default function ReelsScreen({ route, navigation }) {
 
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
-      setActiveVideoIndex(viewableItems[0].index);
+      const visibleIndex = viewableItems[0].index;
+      if (programmaticTargetRef.current !== null) {
+        if (visibleIndex === programmaticTargetRef.current) {
+          programmaticTargetRef.current = null;
+        }
+        return;
+      }
+      setActiveVideoIndex(visibleIndex);
     }
   }).current;
 
@@ -502,6 +633,7 @@ export default function ReelsScreen({ route, navigation }) {
               autoPlay={autoPlay}
               player={player}
               onAutoNext={(nextIndex) => {
+                programmaticTargetRef.current = nextIndex;
                 setActiveVideoIndex(nextIndex);
                 setTimeout(() => {
                   flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
@@ -555,9 +687,53 @@ const styles = StyleSheet.create({
   controlBar: { position: 'absolute', bottom: 50, left: 0, right: 0, paddingHorizontal: 20 },
   timerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   timeLabel: { color: '#FFF', fontSize: 11, width: 40, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 5 },
-  progressBarContainer: { flex: 1, height: 20, marginHorizontal: 5, justifyContent: 'center' },
-  progressTrack: { width: '100%', height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2 },
-  progressBar: { position: 'absolute', left: 0, height: 4, backgroundColor: '#0084FF', borderRadius: 2, zIndex: 1 },
+  progressBarContainer: {
+    flex: 1,
+    height: 30,
+    marginHorizontal: 5,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  progressTrack: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+  },
+  progressTrackActive: {
+    height: 6,
+  },
+  progressBar: {
+    position: 'absolute',
+    left: 0,
+    height: 4,
+    backgroundColor: '#0084FF',
+    borderRadius: 2,
+    zIndex: 1,
+  },
+  progressBarActive: {
+    height: 6,
+  },
+  progressThumb: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#0084FF',
+    zIndex: 2,
+    transform: [{ translateX: -5 }],
+  },
+  progressThumbActive: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    transform: [{ translateX: -8 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 4,
+  },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   iconBtn: { padding: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.8, shadowRadius: 2 },
   mainPlayBtn: { backgroundColor: 'rgba(255,255,255,0.1)', width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 5 },
