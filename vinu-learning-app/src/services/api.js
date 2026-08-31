@@ -41,6 +41,7 @@ export const contentApi = {
   getRecentReleases: () => api.get('/content/releases/recent'),
   getVideoUrl: (episodeId) => `${API_BASE_URL}/content/video/${episodeId}`,
   getPrivacyPolicy: () => api.get('/content/privacy-policy'),
+  getDisclaimer: () => api.get('/content/disclaimer'),
 };
 
 export const progressApi = {

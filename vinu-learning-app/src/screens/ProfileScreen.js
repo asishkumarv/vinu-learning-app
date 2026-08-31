@@ -220,6 +220,7 @@ export default function ProfileScreen() {
           <View style={[styles.menuList, { backgroundColor: colors.surface }]}>
             {renderMenuItem('book-outline', 'Study Materials', () => Alert.alert("Coming Soon"))}
             {renderMenuItem('information-circle-outline', 'Privacy Policy', () => navigation.navigate('PrivacyPolicy'))}
+            {renderMenuItem('alert-circle-outline', 'User Disclaimer', () => navigation.navigate('Disclaimer'))}
           </View>
         </View>
 

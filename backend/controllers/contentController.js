@@ -211,3 +211,16 @@ exports.getPrivacyPolicy = async (req, res) => {
   }
 };
 
+exports.getDisclaimer = async (req, res) => {
+  try {
+    const result = await db.query("SELECT value FROM settings WHERE key = 'disclaimer'");
+    if (result.rows.length === 0) {
+      return res.json({ disclaimer: '' });
+    }
+    res.json({ disclaimer: result.rows[0].value });
+  } catch (error) {
+    console.error('Error fetching disclaimer:', error);
+    res.status(500).json({ error: 'Failed to fetch disclaimer' });
+  }
+};
+

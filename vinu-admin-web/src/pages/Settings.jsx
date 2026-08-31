@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { KeyRound, Eye, EyeOff, Shield } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, Shield, AlertTriangle } from 'lucide-react';
 
 export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -16,8 +16,13 @@ export default function SettingsPage() {
   const [policyLoading, setPolicyLoading] = useState(false);
   const [policyMessage, setPolicyMessage] = useState(null);
 
+  const [disclaimer, setDisclaimer] = useState('');
+  const [disclaimerLoading, setDisclaimerLoading] = useState(false);
+  const [disclaimerMessage, setDisclaimerMessage] = useState(null);
+
   useEffect(() => {
     fetchPrivacyPolicy();
+    fetchDisclaimer();
   }, []);
 
   const fetchPrivacyPolicy = async () => {
@@ -26,6 +31,15 @@ export default function SettingsPage() {
       setPrivacyPolicy(res.data.privacy_policy || '');
     } catch (error) {
       console.error('Failed to fetch privacy policy:', error);
+    }
+  };
+
+  const fetchDisclaimer = async () => {
+    try {
+      const res = await axios.get('/admin/disclaimer');
+      setDisclaimer(res.data.disclaimer || '');
+    } catch (error) {
+      console.error('Failed to fetch disclaimer:', error);
     }
   };
 
@@ -78,6 +92,24 @@ export default function SettingsPage() {
       });
     } finally {
       setPolicyLoading(false);
+    }
+  };
+
+  const handleDisclaimerSubmit = async (e) => {
+    e.preventDefault();
+    setDisclaimerLoading(true);
+    setDisclaimerMessage(null);
+    try {
+      const res = await axios.put('/admin/disclaimer', { disclaimer: disclaimer });
+      setDisclaimerMessage({ type: 'success', text: res.data.message || 'Disclaimer updated successfully!' });
+    } catch (error) {
+      console.error('Disclaimer update error:', error);
+      setDisclaimerMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to update disclaimer.'
+      });
+    } finally {
+      setDisclaimerLoading(false);
     }
   };
 
@@ -221,6 +253,46 @@ export default function SettingsPage() {
 
           <button type="submit" className="btn" disabled={policyLoading} style={{ width: '100%' }}>
             {policyLoading ? 'Saving changes...' : 'Save Privacy Policy'}
+          </button>
+        </form>
+      </div>
+
+      <div className="stat-card" style={{ marginTop: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <AlertTriangle size={22} style={{ color: 'var(--primary-color)' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Edit User Disclaimer</h2>
+        </div>
+
+        {disclaimerMessage && (
+          <div style={{ 
+            padding: '1rem', 
+            marginBottom: '1.5rem', 
+            borderRadius: '0.5rem',
+            backgroundColor: disclaimerMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+            color: disclaimerMessage.type === 'success' ? '#34d399' : '#f87171'
+          }}>
+            {disclaimerMessage.text}
+          </div>
+        )}
+
+        <form onSubmit={handleDisclaimerSubmit}>
+          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+            <label>Disclaimer Content</label>
+            <textarea
+              value={disclaimer}
+              onChange={e => setDisclaimer(e.target.value)}
+              required
+              rows={15}
+              placeholder="Enter User Disclaimer text..."
+              style={{
+                resize: 'vertical',
+                minHeight: '300px'
+              }}
+            />
+          </div>
+
+          <button type="submit" className="btn" disabled={disclaimerLoading} style={{ width: '100%' }}>
+            {disclaimerLoading ? 'Saving changes...' : 'Save Disclaimer'}
           </button>
         </form>
       </div>

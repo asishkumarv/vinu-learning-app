@@ -9,5 +9,6 @@ router.get('/episodes/:chapterId', contentController.getEpisodesByChapter);
 router.get('/releases/recent', contentController.getRecentReleases);
 router.get('/video/:episodeId', contentController.streamVideo);
 router.get('/privacy-policy', contentController.getPrivacyPolicy);
+router.get('/disclaimer', contentController.getDisclaimer);
 
 module.exports = router;

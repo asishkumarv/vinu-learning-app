@@ -638,4 +638,38 @@ router.put('/privacy-policy', async (req, res) => {
   }
 });
 
+// GET current disclaimer for admin
+router.get('/disclaimer', async (req, res) => {
+  try {
+    const result = await db.query("SELECT value FROM settings WHERE key = 'disclaimer'");
+    if (result.rows.length === 0) {
+      return res.json({ disclaimer: '' });
+    }
+    res.json({ disclaimer: result.rows[0].value });
+  } catch (error) {
+    console.error('Failed to fetch disclaimer for admin:', error);
+    res.status(500).json({ error: 'Failed to fetch disclaimer' });
+  }
+});
+
+// UPDATE/PUT disclaimer
+router.put('/disclaimer', async (req, res) => {
+  const { disclaimer } = req.body;
+  if (disclaimer === undefined) {
+    return res.status(400).json({ error: 'disclaimer is required' });
+  }
+  try {
+    const check = await db.query("SELECT key FROM settings WHERE key = 'disclaimer'");
+    if (check.rows.length === 0) {
+      await db.query("INSERT INTO settings (key, value) VALUES ('disclaimer', $1)", [disclaimer]);
+    } else {
+      await db.query("UPDATE settings SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE key = 'disclaimer'", [disclaimer]);
+    }
+    res.json({ message: 'Disclaimer updated successfully' });
+  } catch (error) {
+    console.error('Failed to update disclaimer:', error);
+    res.status(500).json({ error: 'Failed to update disclaimer' });
+  }
+});
+
 module.exports = router;
