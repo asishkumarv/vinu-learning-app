@@ -219,7 +219,7 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>SUPPORT & ABOUT</Text>
           <View style={[styles.menuList, { backgroundColor: colors.surface }]}>
             {renderMenuItem('book-outline', 'Study Materials', () => Alert.alert("Coming Soon"))}
-            {renderMenuItem('information-circle-outline', 'Privacy Policy', () => Alert.alert("Coming Soon"))}
+            {renderMenuItem('information-circle-outline', 'Privacy Policy', () => navigation.navigate('PrivacyPolicy'))}
           </View>
         </View>
 

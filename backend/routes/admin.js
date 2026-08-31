@@ -604,4 +604,38 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+// GET current privacy policy for admin
+router.get('/privacy-policy', async (req, res) => {
+  try {
+    const result = await db.query("SELECT value FROM settings WHERE key = 'privacy_policy'");
+    if (result.rows.length === 0) {
+      return res.json({ privacy_policy: '' });
+    }
+    res.json({ privacy_policy: result.rows[0].value });
+  } catch (error) {
+    console.error('Failed to fetch privacy policy for admin:', error);
+    res.status(500).json({ error: 'Failed to fetch privacy policy' });
+  }
+});
+
+// UPDATE/PUT privacy policy
+router.put('/privacy-policy', async (req, res) => {
+  const { privacy_policy } = req.body;
+  if (privacy_policy === undefined) {
+    return res.status(400).json({ error: 'privacy_policy is required' });
+  }
+  try {
+    const check = await db.query("SELECT key FROM settings WHERE key = 'privacy_policy'");
+    if (check.rows.length === 0) {
+      await db.query("INSERT INTO settings (key, value) VALUES ('privacy_policy', $1)", [privacy_policy]);
+    } else {
+      await db.query("UPDATE settings SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE key = 'privacy_policy'", [privacy_policy]);
+    }
+    res.json({ message: 'Privacy policy updated successfully' });
+  } catch (error) {
+    console.error('Failed to update privacy policy:', error);
+    res.status(500).json({ error: 'Failed to update privacy policy' });
+  }
+});
+
 module.exports = router;

@@ -249,7 +249,7 @@ label {
   color: var(--primary-color);
 }
 
-input[type="text"], input[type="email"], input[type="password"], select, input[type="file"] {
+input[type="text"], input[type="email"], input[type="password"], select, input[type="file"], textarea {
   width: 100%;
   padding: 0.875rem 1.25rem;
   background-color: rgba(15, 23, 42, 0.6);
@@ -261,7 +261,7 @@ input[type="text"], input[type="email"], input[type="password"], select, input[t
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px var(--primary-light);

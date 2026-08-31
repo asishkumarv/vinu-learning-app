@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { KeyRound, Eye, EyeOff } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, Shield } from 'lucide-react';
 
 export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -11,6 +11,23 @@ export default function SettingsPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+
+  const [privacyPolicy, setPrivacyPolicy] = useState('');
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policyMessage, setPolicyMessage] = useState(null);
+
+  useEffect(() => {
+    fetchPrivacyPolicy();
+  }, []);
+
+  const fetchPrivacyPolicy = async () => {
+    try {
+      const res = await axios.get('/admin/privacy-policy');
+      setPrivacyPolicy(res.data.privacy_policy || '');
+    } catch (error) {
+      console.error('Failed to fetch privacy policy:', error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,8 +63,26 @@ export default function SettingsPage() {
     }
   };
 
+  const handlePolicySubmit = async (e) => {
+    e.preventDefault();
+    setPolicyLoading(true);
+    setPolicyMessage(null);
+    try {
+      const res = await axios.put('/admin/privacy-policy', { privacy_policy: privacyPolicy });
+      setPolicyMessage({ type: 'success', text: res.data.message || 'Privacy policy updated successfully!' });
+    } catch (error) {
+      console.error('Privacy policy update error:', error);
+      setPolicyMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to update privacy policy.'
+      });
+    } finally {
+      setPolicyLoading(false);
+    }
+  };
+
   return (
-    <div style={{ maxWidth: '600px' }}>
+    <div style={{ maxWidth: '900px' }}>
       <h1 className="page-title">Settings</h1>
       
       <div className="stat-card">
@@ -146,6 +181,46 @@ export default function SettingsPage() {
 
           <button type="submit" className="btn" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Updating password...' : 'Update Password'}
+          </button>
+        </form>
+      </div>
+
+      <div className="stat-card" style={{ marginTop: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <Shield size={22} style={{ color: 'var(--primary-color)' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Edit Privacy Policy & Terms of Use</h2>
+        </div>
+
+        {policyMessage && (
+          <div style={{ 
+            padding: '1rem', 
+            marginBottom: '1.5rem', 
+            borderRadius: '0.5rem',
+            backgroundColor: policyMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+            color: policyMessage.type === 'success' ? '#34d399' : '#f87171'
+          }}>
+            {policyMessage.text}
+          </div>
+        )}
+
+        <form onSubmit={handlePolicySubmit}>
+          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+            <label>Privacy Policy Content</label>
+            <textarea
+              value={privacyPolicy}
+              onChange={e => setPrivacyPolicy(e.target.value)}
+              required
+              rows={15}
+              placeholder="Enter Privacy Policy and Terms of Use text..."
+              style={{
+                resize: 'vertical',
+                minHeight: '300px'
+              }}
+            />
+          </div>
+
+          <button type="submit" className="btn" disabled={policyLoading} style={{ width: '100%' }}>
+            {policyLoading ? 'Saving changes...' : 'Save Privacy Policy'}
           </button>
         </form>
       </div>

@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '../services/api';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
@@ -24,6 +25,7 @@ export default function RegisterScreen({ navigation, route }) {
   const { mobile } = route?.params || {};
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleRegister = async () => {
     if (!fullName) {
@@ -77,10 +79,33 @@ export default function RegisterScreen({ navigation, route }) {
             onChangeText={setFullName}
           />
 
+          <View style={styles.checkboxContainer}>
+            <TouchableOpacity
+              onPress={() => setAcceptedTerms(!acceptedTerms)}
+              style={styles.checkboxTouch}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={acceptedTerms ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={acceptedTerms ? '#0084FF' : colors.textSecondary}
+              />
+            </TouchableOpacity>
+            <Text style={[styles.checkboxLabel, { color: colors.textSecondary }]}>
+              I agree to the{' '}
+              <Text
+                style={[styles.linkText, { color: '#0084FF' }]}
+                onPress={() => navigation.navigate('PrivacyPolicy')}
+              >
+                Privacy & Policy and Terms of Use
+              </Text>
+            </Text>
+          </View>
+
           <TouchableOpacity
-            style={styles.buttonContainer}
+            style={[styles.buttonContainer, { opacity: acceptedTerms && !loading ? 1 : 0.5 }]}
             onPress={handleRegister}
-            disabled={loading}
+            disabled={!acceptedTerms || loading}
           >
             <LinearGradient
               colors={['#0084FF', '#0055FF']}
@@ -146,5 +171,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 18,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
+  checkboxTouch: {
+    marginRight: 10,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  linkText: {
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });

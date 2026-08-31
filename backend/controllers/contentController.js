@@ -197,3 +197,17 @@ exports.streamVideo = async (req, res) => {
     res.status(500).json({ error: 'Failed to stream video' });
   }
 };
+
+exports.getPrivacyPolicy = async (req, res) => {
+  try {
+    const result = await db.query("SELECT value FROM settings WHERE key = 'privacy_policy'");
+    if (result.rows.length === 0) {
+      return res.json({ privacy_policy: '' });
+    }
+    res.json({ privacy_policy: result.rows[0].value });
+  } catch (error) {
+    console.error('Error fetching privacy policy:', error);
+    res.status(500).json({ error: 'Failed to fetch privacy policy' });
+  }
+};
+
