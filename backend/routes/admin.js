@@ -672,4 +672,55 @@ router.put('/disclaimer', async (req, res) => {
   }
 });
 
+// GET website config for admin
+router.get('/website-config', async (req, res) => {
+  try {
+    const result = await db.query("SELECT value FROM settings WHERE key = 'website_config'");
+    const defaultConfig = {
+      heroTagline: "Listen & Learn — Smart Micro-Learning for AP & Telangana Students",
+      heroSubtitle: "Transform your school and intermediate syllabus into engaging, bite-sized audio & video lessons. Tailored for Andhra Pradesh & Telangana State Boards, plus foundational life skills.",
+      appDownloadUrl: "https://vinuh.in/download",
+      playStoreUrl: "https://play.google.com/store/apps/details?id=com.vinuh.learning",
+      supportEmail: "contact@vinuh.in",
+      supportPhone: "+91 98765 43210",
+      announcement: "🚀 New 10th Class Telugu & Intermediate Lessons Now Live on Vinuh App!"
+    };
+
+    if (result.rows.length === 0) {
+      return res.json(defaultConfig);
+    }
+    try {
+      const parsed = JSON.parse(result.rows[0].value);
+      res.json({ ...defaultConfig, ...parsed });
+    } catch {
+      res.json(defaultConfig);
+    }
+  } catch (error) {
+    console.error('Failed to fetch website config for admin:', error);
+    res.status(500).json({ error: 'Failed to fetch website config' });
+  }
+});
+
+// UPDATE website config for admin
+router.put('/website-config', async (req, res) => {
+  const configData = req.body;
+  if (!configData || typeof configData !== 'object') {
+    return res.status(400).json({ error: 'Invalid config data' });
+  }
+  try {
+    const stringValue = JSON.stringify(configData);
+    const check = await db.query("SELECT key FROM settings WHERE key = 'website_config'");
+    if (check.rows.length === 0) {
+      await db.query("INSERT INTO settings (key, value) VALUES ('website_config', $1)", [stringValue]);
+    } else {
+      await db.query("UPDATE settings SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE key = 'website_config'", [stringValue]);
+    }
+    res.json({ message: 'Website settings updated successfully', config: configData });
+  } catch (error) {
+    console.error('Failed to update website config:', error);
+    res.status(500).json({ error: 'Failed to update website config' });
+  }
+});
+
 module.exports = router;
+

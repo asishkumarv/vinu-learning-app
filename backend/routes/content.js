@@ -10,5 +10,7 @@ router.get('/releases/recent', contentController.getRecentReleases);
 router.get('/video/:episodeId', contentController.streamVideo);
 router.get('/privacy-policy', contentController.getPrivacyPolicy);
 router.get('/disclaimer', contentController.getDisclaimer);
+router.get('/website-config', contentController.getWebsiteConfig);
 
 module.exports = router;
+

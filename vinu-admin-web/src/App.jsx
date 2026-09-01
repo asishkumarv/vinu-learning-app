@@ -104,7 +104,7 @@ function Login({ onLogin }) {
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>Email Address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin@vinuh.com" />
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin@vinuh.in" />
             </div>
             <div className="form-group">
               <label>Password</label>

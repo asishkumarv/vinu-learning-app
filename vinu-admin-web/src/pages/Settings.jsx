@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { KeyRound, Eye, EyeOff, Shield, AlertTriangle } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, Shield, AlertTriangle, Globe } from 'lucide-react';
 
 export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -20,9 +20,22 @@ export default function SettingsPage() {
   const [disclaimerLoading, setDisclaimerLoading] = useState(false);
   const [disclaimerMessage, setDisclaimerMessage] = useState(null);
 
+  const [websiteConfig, setWebsiteConfig] = useState({
+    heroTagline: '',
+    heroSubtitle: '',
+    announcement: '',
+    appDownloadUrl: '',
+    playStoreUrl: '',
+    supportEmail: '',
+    supportPhone: ''
+  });
+  const [webConfigLoading, setWebConfigLoading] = useState(false);
+  const [webConfigMessage, setWebConfigMessage] = useState(null);
+
   useEffect(() => {
     fetchPrivacyPolicy();
     fetchDisclaimer();
+    fetchWebsiteConfig();
   }, []);
 
   const fetchPrivacyPolicy = async () => {
@@ -40,6 +53,25 @@ export default function SettingsPage() {
       setDisclaimer(res.data.disclaimer || '');
     } catch (error) {
       console.error('Failed to fetch disclaimer:', error);
+    }
+  };
+
+  const fetchWebsiteConfig = async () => {
+    try {
+      const res = await axios.get('/admin/website-config');
+      if (res.data) {
+        setWebsiteConfig({
+          heroTagline: res.data.heroTagline || '',
+          heroSubtitle: res.data.heroSubtitle || '',
+          announcement: res.data.announcement || '',
+          appDownloadUrl: res.data.appDownloadUrl || '',
+          playStoreUrl: res.data.playStoreUrl || '',
+          supportEmail: res.data.supportEmail || '',
+          supportPhone: res.data.supportPhone || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch website config:', error);
     }
   };
 
@@ -113,10 +145,209 @@ export default function SettingsPage() {
     }
   };
 
+  const handleWebConfigSubmit = async (e) => {
+    e.preventDefault();
+    setWebConfigLoading(true);
+    setWebConfigMessage(null);
+    try {
+      const res = await axios.put('/admin/website-config', websiteConfig);
+      setWebConfigMessage({ type: 'success', text: res.data.message || 'Website settings updated successfully!' });
+    } catch (error) {
+      console.error('Website config update error:', error);
+      setWebConfigMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to update website settings.'
+      });
+    } finally {
+      setWebConfigLoading(false);
+    }
+  };
+
   return (
-    <div style={{ maxWidth: '900px' }}>
-      <h1 className="page-title">Settings</h1>
+    <div style={{ maxWidth: '900px', paddingBottom: '3rem' }}>
+      <h1 className="page-title">Settings & Content Management</h1>
       
+      {/* 1. Website Settings Card */}
+      <div className="stat-card" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <Globe size={22} style={{ color: 'var(--primary-color)' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Website Content & Links</h2>
+        </div>
+
+        {webConfigMessage && (
+          <div style={{ 
+            padding: '1rem', 
+            marginBottom: '1.5rem', 
+            borderRadius: '0.5rem',
+            backgroundColor: webConfigMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+            color: webConfigMessage.type === 'success' ? '#34d399' : '#f87171'
+          }}>
+            {webConfigMessage.text}
+          </div>
+        )}
+
+        <form onSubmit={handleWebConfigSubmit}>
+          <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+            <label>Hero Headline / Tagline</label>
+            <input 
+              type="text" 
+              value={websiteConfig.heroTagline} 
+              onChange={e => setWebsiteConfig({ ...websiteConfig, heroTagline: e.target.value })} 
+              placeholder="Listen & Learn — Smart Micro-Learning for AP & Telangana Students" 
+            />
+          </div>
+
+          <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+            <label>Hero Subtitle Description</label>
+            <textarea 
+              rows={3}
+              value={websiteConfig.heroSubtitle} 
+              onChange={e => setWebsiteConfig({ ...websiteConfig, heroSubtitle: e.target.value })} 
+              placeholder="Transform your syllabus into engaging, bite-sized audio & video lessons..." 
+            />
+          </div>
+
+          <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+            <label>Top Announcement Bar Text</label>
+            <input 
+              type="text" 
+              value={websiteConfig.announcement} 
+              onChange={e => setWebsiteConfig({ ...websiteConfig, announcement: e.target.value })} 
+              placeholder="🚀 New 10th Class Telugu & Intermediate Lessons Now Live on Vinuh App!" 
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div className="form-group">
+              <label>Direct App / APK Download URL</label>
+              <input 
+                type="url" 
+                value={websiteConfig.appDownloadUrl} 
+                onChange={e => setWebsiteConfig({ ...websiteConfig, appDownloadUrl: e.target.value })} 
+                placeholder="https://vinuh.in/download" 
+              />
+            </div>
+            <div className="form-group">
+              <label>Google Play Store URL</label>
+              <input 
+                type="url" 
+                value={websiteConfig.playStoreUrl} 
+                onChange={e => setWebsiteConfig({ ...websiteConfig, playStoreUrl: e.target.value })} 
+                placeholder="https://play.google.com/store/apps/details?id=..." 
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="form-group">
+              <label>Support Email Address</label>
+              <input 
+                type="email" 
+                value={websiteConfig.supportEmail} 
+                onChange={e => setWebsiteConfig({ ...websiteConfig, supportEmail: e.target.value })} 
+                placeholder="contact@vinuh.in" 
+              />
+            </div>
+            <div className="form-group">
+              <label>Support Phone / WhatsApp</label>
+              <input 
+                type="text" 
+                value={websiteConfig.supportPhone} 
+                onChange={e => setWebsiteConfig({ ...websiteConfig, supportPhone: e.target.value })} 
+                placeholder="+91 98765 43210" 
+              />
+            </div>
+          </div>
+
+          <button type="submit" className="btn" disabled={webConfigLoading} style={{ width: '100%' }}>
+            {webConfigLoading ? 'Saving Website Settings...' : 'Save Website Settings'}
+          </button>
+        </form>
+      </div>
+
+      {/* 2. Privacy Policy & Terms Card */}
+      <div className="stat-card" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <Shield size={22} style={{ color: 'var(--primary-color)' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Edit Privacy Policy & Terms of Use</h2>
+        </div>
+
+        {policyMessage && (
+          <div style={{ 
+            padding: '1rem', 
+            marginBottom: '1.5rem', 
+            borderRadius: '0.5rem',
+            backgroundColor: policyMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+            color: policyMessage.type === 'success' ? '#34d399' : '#f87171'
+          }}>
+            {policyMessage.text}
+          </div>
+        )}
+
+        <form onSubmit={handlePolicySubmit}>
+          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+            <label>Privacy Policy & Terms of Use Content (Live on App & Website)</label>
+            <textarea
+              value={privacyPolicy}
+              onChange={e => setPrivacyPolicy(e.target.value)}
+              required
+              rows={15}
+              placeholder="Enter Privacy Policy and Terms of Use text..."
+              style={{
+                resize: 'vertical',
+                minHeight: '280px'
+              }}
+            />
+          </div>
+
+          <button type="submit" className="btn" disabled={policyLoading} style={{ width: '100%' }}>
+            {policyLoading ? 'Saving changes...' : 'Save Privacy Policy & Terms'}
+          </button>
+        </form>
+      </div>
+
+      {/* 3. Disclaimer Card */}
+      <div className="stat-card" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <AlertTriangle size={22} style={{ color: 'var(--primary-color)' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Edit User Disclaimer</h2>
+        </div>
+
+        {disclaimerMessage && (
+          <div style={{ 
+            padding: '1rem', 
+            marginBottom: '1.5rem', 
+            borderRadius: '0.5rem',
+            backgroundColor: disclaimerMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+            color: disclaimerMessage.type === 'success' ? '#34d399' : '#f87171'
+          }}>
+            {disclaimerMessage.text}
+          </div>
+        )}
+
+        <form onSubmit={handleDisclaimerSubmit}>
+          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+            <label>Disclaimer Content (Live on App & Website)</label>
+            <textarea
+              value={disclaimer}
+              onChange={e => setDisclaimer(e.target.value)}
+              required
+              rows={12}
+              placeholder="Enter User Disclaimer text..."
+              style={{
+                resize: 'vertical',
+                minHeight: '250px'
+              }}
+            />
+          </div>
+
+          <button type="submit" className="btn" disabled={disclaimerLoading} style={{ width: '100%' }}>
+            {disclaimerLoading ? 'Saving changes...' : 'Save Disclaimer'}
+          </button>
+        </form>
+      </div>
+
+      {/* 4. Change Password Card */}
       <div className="stat-card">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
           <KeyRound size={22} className="text-primary" style={{ color: 'var(--primary-color)' }} />
@@ -216,86 +447,7 @@ export default function SettingsPage() {
           </button>
         </form>
       </div>
-
-      <div className="stat-card" style={{ marginTop: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          <Shield size={22} style={{ color: 'var(--primary-color)' }} />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Edit Privacy Policy & Terms of Use</h2>
-        </div>
-
-        {policyMessage && (
-          <div style={{ 
-            padding: '1rem', 
-            marginBottom: '1.5rem', 
-            borderRadius: '0.5rem',
-            backgroundColor: policyMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-            color: policyMessage.type === 'success' ? '#34d399' : '#f87171'
-          }}>
-            {policyMessage.text}
-          </div>
-        )}
-
-        <form onSubmit={handlePolicySubmit}>
-          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-            <label>Privacy Policy Content</label>
-            <textarea
-              value={privacyPolicy}
-              onChange={e => setPrivacyPolicy(e.target.value)}
-              required
-              rows={15}
-              placeholder="Enter Privacy Policy and Terms of Use text..."
-              style={{
-                resize: 'vertical',
-                minHeight: '300px'
-              }}
-            />
-          </div>
-
-          <button type="submit" className="btn" disabled={policyLoading} style={{ width: '100%' }}>
-            {policyLoading ? 'Saving changes...' : 'Save Privacy Policy'}
-          </button>
-        </form>
-      </div>
-
-      <div className="stat-card" style={{ marginTop: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          <AlertTriangle size={22} style={{ color: 'var(--primary-color)' }} />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Edit User Disclaimer</h2>
-        </div>
-
-        {disclaimerMessage && (
-          <div style={{ 
-            padding: '1rem', 
-            marginBottom: '1.5rem', 
-            borderRadius: '0.5rem',
-            backgroundColor: disclaimerMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-            color: disclaimerMessage.type === 'success' ? '#34d399' : '#f87171'
-          }}>
-            {disclaimerMessage.text}
-          </div>
-        )}
-
-        <form onSubmit={handleDisclaimerSubmit}>
-          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-            <label>Disclaimer Content</label>
-            <textarea
-              value={disclaimer}
-              onChange={e => setDisclaimer(e.target.value)}
-              required
-              rows={15}
-              placeholder="Enter User Disclaimer text..."
-              style={{
-                resize: 'vertical',
-                minHeight: '300px'
-              }}
-            />
-          </div>
-
-          <button type="submit" className="btn" disabled={disclaimerLoading} style={{ width: '100%' }}>
-            {disclaimerLoading ? 'Saving changes...' : 'Save Disclaimer'}
-          </button>
-        </form>
-      </div>
     </div>
   );
 }
+

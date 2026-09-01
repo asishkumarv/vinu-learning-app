@@ -224,3 +224,32 @@ exports.getDisclaimer = async (req, res) => {
   }
 };
 
+exports.getWebsiteConfig = async (req, res) => {
+  try {
+    const result = await db.query("SELECT value FROM settings WHERE key = 'website_config'");
+    const defaultConfig = {
+      heroTagline: "Listen & Learn — Smart Micro-Learning for AP & Telangana Students",
+      heroSubtitle: "Transform your school and intermediate syllabus into engaging, bite-sized audio & video lessons. Tailored for Andhra Pradesh & Telangana State Boards, plus foundational life skills.",
+      appDownloadUrl: "https://vinuh.in/download",
+      playStoreUrl: "https://play.google.com/store/apps/details?id=com.vinuh.learning",
+      supportEmail: "contact@vinuh.in",
+      supportPhone: "+91 98765 43210",
+      announcement: "🚀 New 10th Class Telugu & Intermediate Lessons Now Live on Vinuh App!"
+    };
+
+    if (result.rows.length === 0) {
+      return res.json(defaultConfig);
+    }
+    try {
+      const parsed = JSON.parse(result.rows[0].value);
+      res.json({ ...defaultConfig, ...parsed });
+    } catch {
+      res.json(defaultConfig);
+    }
+  } catch (error) {
+    console.error('Error fetching website config:', error);
+    res.status(500).json({ error: 'Failed to fetch website config' });
+  }
+};
+
+
