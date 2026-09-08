@@ -1,14 +1,31 @@
 const db = require('../db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { sendOTP } = require('../utils/twilio');
+const { sendOTP, checkVerifyOTP, formatE164 } = require('../utils/twilio');
 
-// In-memory OTP storage (for production, use Redis or DB)
+// In-memory OTP storage (for production, use Redis or DB table)
 const otps = new Map();
 
+/**
+ * Standardize mobile number format (stores 10-digit number or formatted mobile)
+ */
+const cleanMobileNumber = (mobile) => {
+  if (!mobile) return '';
+  const digits = String(mobile).replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  return digits;
+};
+
+/**
+ * Register a new user after OTP verification
+ */
 exports.register = async (req, res) => {
   try {
-    const { mobile, name } = req.body;
+    const rawMobile = req.body.mobile;
+    const { name } = req.body;
+    const mobile = cleanMobileNumber(rawMobile);
 
     if (!mobile || !name) {
       return res.status(400).json({ error: 'Mobile and name are required' });
@@ -16,71 +33,95 @@ exports.register = async (req, res) => {
 
     const stored = otps.get(mobile);
     if (!stored || !stored.verified) {
-      return res.status(400).json({ error: 'Mobile number not verified' });
+      return res.status(400).json({ error: 'Mobile number not verified or verification expired' });
     }
 
-    // Check if user already exists just in case
+    // Check if user already exists
     const userExist = await db.query('SELECT * FROM users WHERE mobile = $1', [mobile]);
     if (userExist.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
+      // User exists, return existing user
+      const user = userExist.rows[0];
+      otps.delete(mobile);
+      const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+      return res.status(200).json({ message: 'User already exists, logged in successfully', token, user });
     }
 
-    // Create user
+    // Create user in PostgreSQL
     const newUser = await db.query(
-      'INSERT INTO users (mobile, name) VALUES ($1, $2) RETURNING id, name, mobile',
-      [mobile, name]
+      'INSERT INTO users (mobile, name) VALUES ($1, $2) RETURNING id, name, mobile, created_at',
+      [mobile, name.trim()]
     );
     const user = newUser.rows[0];
 
-    // Clear OTP
+    // Clear OTP verification session
     otps.delete(mobile);
 
     // Generate JWT
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
     res.status(200).json({ message: 'User registered successfully', token, user });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to register' });
+    console.error('[Auth Register Error]:', error);
+    res.status(500).json({ error: 'Failed to complete registration' });
   }
 };
 
+/**
+ * Verify OTP code for Login / Registration
+ */
 exports.verifyOtp = async (req, res) => {
   try {
-    const { mobile, otp } = req.body;
-    
+    const rawMobile = req.body.mobile;
+    const inputOtp = String(req.body.otp || '').trim();
+    const mobile = cleanMobileNumber(rawMobile);
+
+    if (!mobile || !inputOtp) {
+      return res.status(400).json({ error: 'Mobile number and OTP are required' });
+    }
+
     const stored = otps.get(mobile);
-    if (!stored || stored.otp !== otp || stored.expires < Date.now()) {
-      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    let isVerified = false;
+
+    // 1. Try checking against Twilio Verify API
+    try {
+      const verifyCheck = await checkVerifyOTP(mobile, inputOtp);
+      if (verifyCheck === true) {
+        isVerified = true;
+      }
+    } catch (e) {
+      console.warn('[Twilio Verify] Verification check skipped or failed:', e.message);
     }
 
-    if (stored.type !== 'auth') {
-      return res.status(400).json({ error: 'Invalid OTP type' });
+    // 2. Check local in-memory OTP fallback
+    if (!isVerified && stored && stored.otp === inputOtp && stored.expires > Date.now()) {
+      isVerified = true;
     }
 
-    // Check if existing user
+    if (!isVerified) {
+      return res.status(400).json({ error: 'Invalid or expired OTP code' });
+    }
+
+    // Check if user exists in database
     const existingUser = await db.query(
-      'SELECT id, name, mobile FROM users WHERE mobile = $1',
+      'SELECT id, name, mobile, created_at FROM users WHERE mobile = $1',
       [mobile]
     );
 
     if (existingUser.rows.length === 0) {
-      // User doesn't exist, mark as verified and tell frontend to ask for name
-      otps.set(mobile, { verified: true });
+      // User doesn't exist -> Mark mobile as verified and instruct frontend to prompt for name
+      otps.set(mobile, { verified: true, expires: Date.now() + 600000 });
       return res.status(200).json({ 
-        message: 'OTP verified, new user', 
-        isNewUser: true 
+        message: 'OTP verified successfully. Please complete registration.', 
+        isNewUser: true,
+        mobile 
       });
     }
 
-    // User exists, login
+    // Existing user -> Complete login
     const user = existingUser.rows[0];
-
-    // Clear OTP
     otps.delete(mobile);
 
-    // Generate JWT
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
     res.status(200).json({
       message: 'Login successful',
@@ -89,32 +130,57 @@ exports.verifyOtp = async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error(error);
+    console.error('[Auth Verify OTP Error]:', error);
     res.status(500).json({ error: 'Failed to verify OTP' });
   }
 };
 
+/**
+ * Request / Send OTP to WhatsApp
+ */
 exports.login = async (req, res) => {
   try {
-    const { mobile } = req.body;
+    const rawMobile = req.body.mobile;
+    const channel = req.body.channel || 'whatsapp';
+    const mobile = cleanMobileNumber(rawMobile);
 
-    if (!mobile) {
-      return res.status(400).json({ error: 'Mobile number is required' });
+    if (!mobile || mobile.length < 10) {
+      return res.status(400).json({ error: 'Please provide a valid 10-digit mobile number' });
     }
 
+    // Generate 6-digit OTP code
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otps.set(mobile, { otp, type: 'auth', expires: Date.now() + 600000 }); // 10 mins
+    otps.set(mobile, { 
+      otp, 
+      type: 'auth', 
+      expires: Date.now() + 600000 // 10 minutes expiry
+    });
 
-    // Send OTP via WhatsApp
-    await sendOTP(mobile, otp);
+    // Send via WhatsApp (or Twilio Verify)
+    const result = await sendOTP(mobile, otp, channel);
 
-    res.status(200).json({ message: 'OTP sent' });
+    res.status(200).json({ 
+      message: 'OTP sent successfully to your WhatsApp number', 
+      mobile,
+      deliveryStatus: result.status || 'sent',
+      mode: result.mode
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to send OTP' });
+    console.error('[Auth Login / Send OTP Error]:', error);
+    res.status(500).json({ error: 'Failed to dispatch OTP. Please try again.' });
   }
 };
 
+/**
+ * Resend OTP
+ */
+exports.resendOtp = async (req, res) => {
+  return exports.login(req, res);
+};
+
+/**
+ * Get current user profile
+ */
 exports.getProfile = async (req, res) => {
   try {
     const user = await db.query('SELECT id, name, mobile, created_at FROM users WHERE id = $1', [req.user.id]);
@@ -128,12 +194,18 @@ exports.getProfile = async (req, res) => {
   }
 };
 
+/**
+ * Update user profile
+ */
 exports.updateProfile = async (req, res) => {
   try {
     const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
     const result = await db.query(
-      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, mobile',
-      [name, req.user.id]
+      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, mobile, created_at',
+      [name.trim(), req.user.id]
     );
     res.status(200).json({ message: 'Profile updated', user: result.rows[0] });
   } catch (error) {
@@ -142,6 +214,9 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
+/**
+ * Admin login
+ */
 exports.adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;

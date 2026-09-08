@@ -3,48 +3,124 @@ require('dotenv').config();
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromWhatsApp = process.env.TWILIO_WHATSAPP_NUMBER; // e.g., 'whatsapp:+14155238886'
+const fromWhatsApp = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+15553704726';
+const contentSid = process.env.TWILIO_CONTENT_SID;
+const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
 let client = null;
 if (accountSid && accountSid.startsWith('AC') && authToken) {
   try {
     client = twilio(accountSid, authToken);
+    console.log('[Twilio] Client initialized successfully.');
   } catch (err) {
-    console.error('[OTP] Failed to initialize Twilio client:', err.message);
+    console.error('[Twilio] Failed to initialize Twilio client:', err.message);
   }
 } else {
-  console.warn('[OTP] Twilio credentials invalid or missing from environment. Client not initialized.');
+  console.warn('[Twilio] Credentials invalid or missing from environment.');
 }
 
-const sendOTP = async (mobile, otp) => {
-  console.log(`\n======================================\n[OTP] Generated code for ${mobile}: ${otp}\n======================================\n`);
-  
-  if (!client || !fromWhatsApp) {
-    console.warn('[OTP] Twilio client or from number not available. Skipping WhatsApp message dispatch.');
-    return { sid: 'mock-sid-development' };
+/**
+ * Format mobile number to E.164 (e.g. +917036734568)
+ */
+const formatE164 = (mobile) => {
+  if (!mobile) return '';
+  let clean = String(mobile).replace(/\D/g, '');
+  // Default to India (+91) if 10 digits
+  if (clean.length === 10) {
+    clean = '91' + clean;
   }
-  
-  try {
-    // Sanitize mobile number: remove any non-digit characters
-    let cleanMobile = mobile.replace(/\D/g, '');
-    
-    // If it has 10 digits, prepend 91 (India country code)
-    if (cleanMobile.length === 10) {
-      cleanMobile = '91' + cleanMobile;
-    }
+  return `+${clean}`;
+};
 
-    const message = await client.messages.create({
-      body: `Your Vinu Learning App verification code is: ${otp}`,
-      from: fromWhatsApp,
-      to: `whatsapp:+${cleanMobile}`,
-    });
-    console.log(`[OTP] WhatsApp message sent successfully via Twilio. SID: ${message.sid}`);
-    return message;
+/**
+ * Send OTP via Approved WhatsApp Content Template, Twilio Verify, or SMS
+ * @param {string} mobile - Recipient mobile number (e.g., 7036734568 or +917036734568)
+ * @param {string} otp - 6-digit OTP code
+ * @param {string} [preferredChannel='whatsapp'] - Channel ('whatsapp' or 'sms')
+ */
+const sendOTP = async (mobile, otp, preferredChannel = 'whatsapp') => {
+  const formattedMobile = formatE164(mobile);
+  console.log(`\n======================================\n[OTP] Dispatching OTP for ${formattedMobile} (Code: ${otp}) via ${preferredChannel}\n======================================\n`);
+
+  if (!client) {
+    console.warn('[OTP] Twilio client not available. Running in mock/development mode.');
+    return { success: true, sid: 'mock-sid-development', mode: 'mock' };
+  }
+
+  // Option 1: Send via Approved WhatsApp Authentication Content Template
+  if (preferredChannel === 'whatsapp' && fromWhatsApp) {
+    try {
+      const toWhatsApp = `whatsapp:${formattedMobile}`;
+      console.log(`[WhatsApp Template] Sending from ${fromWhatsApp} to ${toWhatsApp} using Content SID: ${contentSid || 'direct'}...`);
+
+      const msgParams = {
+        from: fromWhatsApp,
+        to: toWhatsApp,
+      };
+
+      if (contentSid) {
+        msgParams.contentSid = contentSid;
+        msgParams.contentVariables = JSON.stringify({ "1": String(otp) });
+      } else {
+        msgParams.body = `Your Vinuh verification code is: ${otp}. Valid for 10 minutes.`;
+      }
+
+      const message = await client.messages.create(msgParams);
+      console.log(`[WhatsApp Template] Dispatched successfully! SID: ${message.sid}, Status: ${message.status}`);
+      return { success: true, sid: message.sid, mode: 'approved_whatsapp_template', status: message.status };
+    } catch (templateError) {
+      console.error('[WhatsApp Template Error]:', templateError.message, 'Code:', templateError.code);
+    }
+  }
+
+  // Option 2: Fallback to Twilio Verify API
+  if (verifyServiceSid) {
+    try {
+      console.log(`[Twilio Verify Fallback] Requesting verification for ${formattedMobile}...`);
+      const verification = await client.verify.v2
+        .services(verifyServiceSid)
+        .verifications.create({
+          to: formattedMobile,
+          channel: preferredChannel || 'sms',
+        });
+
+      console.log(`[Twilio Verify] Verification created. SID: ${verification.sid}, Status: ${verification.status}`);
+      return { success: true, sid: verification.sid, mode: 'verify', status: verification.status };
+    } catch (verifyError) {
+      console.error('[Twilio Verify Error]:', verifyError.message);
+    }
+  }
+
+  return { success: false, sid: 'dispatch-failed', error: 'All dispatch methods failed' };
+};
+
+/**
+ * Verify OTP code via Twilio Verify API (optional check)
+ * @param {string} mobile 
+ * @param {string} code 
+ */
+const checkVerifyOTP = async (mobile, code) => {
+  if (!client || !verifyServiceSid) {
+    return null;
+  }
+
+  try {
+    const formattedMobile = formatE164(mobile);
+    const check = await client.verify.v2
+      .services(verifyServiceSid)
+      .verificationChecks.create({
+        to: formattedMobile,
+        code: String(code).trim(),
+      });
+
+    return check.status === 'approved';
   } catch (error) {
-    console.error('[OTP] Error sending WhatsApp message via Twilio:', error.message);
-    // Return a mock result instead of throwing to allow testing to continue
-    return { sid: 'mock-sid-error-fallback' };
+    return null;
   }
 };
 
-module.exports = { sendOTP };
+module.exports = {
+  sendOTP,
+  checkVerifyOTP,
+  formatE164,
+};

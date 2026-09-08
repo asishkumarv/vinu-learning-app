@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   Image,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function OtpScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -23,40 +25,96 @@ export default function OtpScreen({ navigation, route }) {
   const { mobile } = route.params || {};
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   const handleVerifyOtp = async () => {
-    if (otp.length !== 6) {
-      Toast.show({ type: 'error', text1: 'Please enter a 6 digit OTP' });
+    if (otp.trim().length !== 6) {
+      Toast.show({ type: 'error', text1: 'Please enter the 6-digit OTP' });
       return;
     }
 
     setLoading(true);
     try {
-      const response = await authApi.verifyOtp({ mobile, otp });
+      const response = await authApi.verifyOtp({ mobile, otp: otp.trim() });
       
       if (response.data.isNewUser) {
-        Toast.show({ type: 'success', text1: 'OTP Verified', text2: 'Please complete your profile' });
+        Toast.show({ 
+          type: 'success', 
+          text1: 'OTP Verified', 
+          text2: 'Please complete your profile to continue' 
+        });
         navigation.replace('Register', { mobile });
       } else {
         await AsyncStorage.setItem('userToken', response.data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-        Toast.show({ type: 'success', text1: 'Verification Successful' });
+        if (response.data.user) {
+          await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+        }
+        Toast.show({ type: 'success', text1: 'Welcome back!', text2: 'Login successful' });
         navigation.replace('Main');
       }
     } catch (error) {
+      console.error('OTP Verification Error:', error);
+      let errorMsg = 'Invalid OTP code. Please check and try again.';
+      if (error.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      }
       Toast.show({ 
         type: 'error', 
         text1: 'Verification Failed', 
-        text2: error.response?.data?.error || 'Something went wrong' 
+        text2: errorMsg 
       });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResendOtp = async () => {
+    if (countdown > 0 || resending) return;
+
+    setResending(true);
+    try {
+      await authApi.resendOtp({ mobile });
+      setCountdown(30);
+      Toast.show({
+        type: 'success',
+        text1: 'OTP Resent',
+        text2: 'New verification code dispatched to WhatsApp'
+      });
+    } catch (error) {
+      console.error('Resend OTP Error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Resend Failed',
+        text2: error.response?.data?.error || 'Could not resend OTP. Please try again.'
+      });
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
     <View style={[styles.safeArea, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar barStyle={colors.text === '#FFFFFF' ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+      
+      {/* Top back navigation */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity 
+          style={[styles.backBtn, { backgroundColor: colors.surface }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
@@ -69,9 +127,12 @@ export default function OtpScreen({ navigation, route }) {
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.heading, { color: colors.text }]}>OTP Verification</Text>
+          <Text style={[styles.heading, { color: colors.text }]}>Enter Verification Code</Text>
           <Text style={[styles.subText, { color: colors.textSecondary }]}>
-            Enter the 6 digit code sent to your mobile number.
+            We've sent a 6-digit code to WhatsApp on{' '}
+            <Text style={{ fontWeight: 'bold', color: colors.text }}>
+              {mobile ? (mobile.length === 10 ? `+91 ${mobile}` : mobile) : ''}
+            </Text>
           </Text>
 
           <TextInput
@@ -82,6 +143,7 @@ export default function OtpScreen({ navigation, route }) {
             maxLength={6}
             value={otp}
             onChangeText={setOtp}
+            autoFocus={true}
           />
 
           <TouchableOpacity
@@ -93,15 +155,30 @@ export default function OtpScreen({ navigation, route }) {
               colors={['#0084FF', '#0055FF']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>{loading ? 'Verifying...' : 'Verify & Proceed'}</Text>
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Verify & Continue</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.resendContainer}>
-            <Text style={{ color: colors.textSecondary }}>
-              Didn't receive code? <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Resend</Text>
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.resendContainer}>
+            {countdown > 0 ? (
+              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                Resend code in <Text style={{ color: '#0084FF', fontWeight: 'bold' }}>{countdown}s</Text>
+              </Text>
+            ) : (
+              <TouchableOpacity onPress={handleResendOtp} disabled={resending}>
+                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                  Didn't receive code?{' '}
+                  <Text style={{ color: '#0084FF', fontWeight: 'bold' }}>
+                    {resending ? 'Sending...' : 'Resend Code'}
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -112,6 +189,22 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  headerBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -119,12 +212,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   logo: {
     width: 80,
     height: 80,
-    borderRadius: 15,
+    borderRadius: 18,
   },
   card: {
     width: '100%',
@@ -137,23 +230,23 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   heading: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 10,
   },
   subText: {
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 25,
     fontSize: 14,
     lineHeight: 20,
   },
   input: {
     borderRadius: 15,
-    paddingVertical: 15,
-    fontSize: 28,
+    paddingVertical: 14,
+    fontSize: 26,
     textAlign: 'center',
-    letterSpacing: 10,
+    letterSpacing: 8,
     marginBottom: 25,
     borderWidth: 1,
   },
@@ -162,7 +255,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   button: {
-    paddingVertical: 18,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   buttonText: {
