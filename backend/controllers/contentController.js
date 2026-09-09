@@ -252,4 +252,53 @@ exports.getWebsiteConfig = async (req, res) => {
   }
 };
 
+exports.searchEpisodes = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      return res.json([]);
+    }
+
+    const searchPattern = `%${q.trim()}%`;
+    const result = await db.query(
+      `SELECT 
+        e.id, 
+        e.chapter_id, 
+        e.title, 
+        e.thumbnail_url, 
+        e.video_url, 
+        e.duration, 
+        e.is_free, 
+        e.is_recent, 
+        e.created_at,
+        c.name as chapter_name, 
+        s.name as subject_name,
+        cl.name as class_name
+      FROM episodes e
+      JOIN chapters c ON e.chapter_id = c.id
+      JOIN subjects s ON c.subject_id = s.id
+      LEFT JOIN classes cl ON s.class_id = cl.id
+      WHERE e.title ILIKE $1 
+         OR c.name ILIKE $1 
+         OR s.name ILIKE $1 
+         OR cl.name ILIKE $1
+      ORDER BY e.created_at DESC 
+      LIMIT 50`,
+      [searchPattern]
+    );
+
+    const mapped = result.rows.map(row => ({
+      ...row,
+      video_url: makeAbsolute(row.video_url, req),
+      thumbnail_url: makeAbsolute(row.thumbnail_url, req)
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Error searching episodes:', error);
+    res.status(500).json({ error: 'Failed to search episodes' });
+  }
+};
+
+
 

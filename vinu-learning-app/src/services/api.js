@@ -35,6 +35,7 @@ export const authApi = {
 };
 
 export const contentApi = {
+  searchVideos: (query) => api.get('/content/search', { params: { q: query } }),
   getClasses: () => api.get('/content/classes'),
   getSubjects: (classId) => api.get(`/content/subjects/${classId}`),
   getChapters: (subjectId) => api.get(`/content/chapters/${subjectId}`),

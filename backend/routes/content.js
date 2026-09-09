@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const contentController = require('../controllers/contentController');
 
+router.get('/search', contentController.searchEpisodes);
 router.get('/classes', contentController.getClasses);
 router.get('/subjects/:classId', contentController.getSubjectsByClass);
 router.get('/chapters/:subjectId', contentController.getChaptersBySubject);
