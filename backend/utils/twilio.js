@@ -47,8 +47,10 @@ const sendOTP = async (mobile, otp, preferredChannel = 'whatsapp') => {
     return { success: true, sid: 'mock-sid-development', mode: 'mock' };
   }
 
-  // Option 1: Send via Approved WhatsApp Authentication Content Template
-  if (preferredChannel === 'whatsapp' && fromWhatsApp) {
+  const isPlaceholderWhatsApp = fromWhatsApp && (fromWhatsApp.includes('5553704726') || fromWhatsApp.includes('1555'));
+
+  // Option 1: Send via Approved WhatsApp Authentication Content Template (if valid sender configured)
+  if (preferredChannel === 'whatsapp' && fromWhatsApp && !isPlaceholderWhatsApp) {
     try {
       const toWhatsApp = `whatsapp:${formattedMobile}`;
       console.log(`[WhatsApp Template] Sending from ${fromWhatsApp} to ${toWhatsApp} using Content SID: ${contentSid || 'direct'}...`);
@@ -71,21 +73,23 @@ const sendOTP = async (mobile, otp, preferredChannel = 'whatsapp') => {
     } catch (templateError) {
       console.error('[WhatsApp Template Error]:', templateError.message, 'Code:', templateError.code);
     }
+  } else if (preferredChannel === 'whatsapp' && isPlaceholderWhatsApp) {
+    console.warn(`[WhatsApp Warning] TWILIO_WHATSAPP_NUMBER (${fromWhatsApp}) is a placeholder 555 number. Falling back to Twilio Verify SMS...`);
   }
 
-  // Option 2: Fallback to Twilio Verify API
+  // Option 2: Fallback to Twilio Verify API (SMS)
   if (verifyServiceSid) {
     try {
-      console.log(`[Twilio Verify Fallback] Requesting verification for ${formattedMobile}...`);
+      console.log(`[Twilio Verify Fallback] Requesting SMS verification for ${formattedMobile}...`);
       const verification = await client.verify.v2
         .services(verifyServiceSid)
         .verifications.create({
           to: formattedMobile,
-          channel: preferredChannel || 'sms',
+          channel: 'sms',
         });
 
       console.log(`[Twilio Verify] Verification created. SID: ${verification.sid}, Status: ${verification.status}`);
-      return { success: true, sid: verification.sid, mode: 'verify', status: verification.status };
+      return { success: true, sid: verification.sid, mode: 'verify_sms', status: verification.status };
     } catch (verifyError) {
       console.error('[Twilio Verify Error]:', verifyError.message);
     }
