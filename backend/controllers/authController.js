@@ -19,6 +19,12 @@ const cleanMobileNumber = (mobile) => {
 };
 
 /**
+ * Helpers to get dummy test credentials from environment variables
+ */
+const getDummyMobile = () => cleanMobileNumber(process.env.DUMMY_MOBILE || '9999999999');
+const getDummyOtp = () => String(process.env.DUMMY_OTP || '123456').trim();
+
+/**
  * Register a new user after OTP verification
  */
 exports.register = async (req, res) => {
@@ -79,22 +85,30 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ error: 'Mobile number and OTP are required' });
     }
 
+    const dummyMobile = getDummyMobile();
+    const dummyOtp = getDummyOtp();
+
     const stored = otps.get(mobile);
     let isVerified = false;
 
-    // 1. Try checking against Twilio Verify API
-    try {
-      const verifyCheck = await checkVerifyOTP(mobile, inputOtp);
-      if (verifyCheck === true) {
+    // 0. Check dummy test account credentials
+    if (mobile === dummyMobile && inputOtp === dummyOtp) {
+      isVerified = true;
+    } else {
+      // 1. Try checking against Twilio Verify API
+      try {
+        const verifyCheck = await checkVerifyOTP(mobile, inputOtp);
+        if (verifyCheck === true) {
+          isVerified = true;
+        }
+      } catch (e) {
+        console.warn('[Twilio Verify] Verification check skipped or failed:', e.message);
+      }
+
+      // 2. Check local in-memory OTP fallback
+      if (!isVerified && stored && stored.otp === inputOtp && stored.expires > Date.now()) {
         isVerified = true;
       }
-    } catch (e) {
-      console.warn('[Twilio Verify] Verification check skipped or failed:', e.message);
-    }
-
-    // 2. Check local in-memory OTP fallback
-    if (!isVerified && stored && stored.otp === inputOtp && stored.expires > Date.now()) {
-      isVerified = true;
     }
 
     if (!isVerified) {
@@ -102,10 +116,19 @@ exports.verifyOtp = async (req, res) => {
     }
 
     // Check if user exists in database
-    const existingUser = await db.query(
+    let existingUser = await db.query(
       'SELECT id, name, mobile, created_at FROM users WHERE mobile = $1',
       [mobile]
     );
+
+    // Auto-create dummy user in DB if it doesn't exist yet
+    if (existingUser.rows.length === 0 && mobile === dummyMobile) {
+      const newDummyUser = await db.query(
+        'INSERT INTO users (mobile, name) VALUES ($1, $2) RETURNING id, name, mobile, created_at',
+        [mobile, 'Dummy Account']
+      );
+      existingUser = newDummyUser;
+    }
 
     if (existingUser.rows.length === 0) {
       // User doesn't exist -> Mark mobile as verified and instruct frontend to prompt for name
@@ -148,7 +171,26 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Please provide a valid 10-digit mobile number' });
     }
 
-    // Generate 6-digit OTP code
+    const dummyMobile = getDummyMobile();
+    const dummyOtp = getDummyOtp();
+
+    // Check if this request is for the dummy test account
+    if (mobile === dummyMobile) {
+      otps.set(mobile, { 
+        otp: dummyOtp, 
+        type: 'auth', 
+        expires: Date.now() + 86400000 // 24 hours expiry for test account
+      });
+      console.log(`[Auth Login] Dummy mobile ${mobile} requested. Skipping Twilio dispatch.`);
+      return res.status(200).json({ 
+        message: 'OTP sent successfully to your WhatsApp number', 
+        mobile,
+        deliveryStatus: 'sent',
+        mode: 'dummy'
+      });
+    }
+
+    // Generate 6-digit OTP code for all other numbers
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     otps.set(mobile, { 
       otp, 

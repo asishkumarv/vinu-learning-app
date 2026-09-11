@@ -1,4 +1,4 @@
-package com.asishkumarv.vinulearningapp
+package com.asishkumarv.vinuhlearningapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

@@ -1,4 +1,4 @@
-package com.asishkumarv.vinulearningapp
+package com.asishkumarv.vinuhlearningapp
 
 import android.app.Application
 import android.content.res.Configuration
